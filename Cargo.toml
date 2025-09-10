@@ -1,0 +1,64 @@
+[workspace]
+members = ["server", "lambda"]
+default-members = ["server", "migrator"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+aes-gcm = "0.10.3"
+anyhow = "1.0.89"
+archodex-error = { path = "archodex-error" }
+aws-config = { version = "1.5.0", features = ["behavior-version-latest"] }
+aws-sdk-cloudwatch = { version = "1.56.0", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = { version = "1.30.0", features = ["behavior-version-latest"] }
+aws-sdk-kms = { version = "1.51.0", features = ["behavior-version-latest"] }
+aws-sdk-organizations = { version = "1.57.0", features = ["behavior-version-latest"] }
+aws-sdk-ssm = { version = "1.56.0", features = ["behavior-version-latest"] }
+aws-sdk-sts = { version = "1.51.0", features = ["behavior-version-latest"] }
+aws-smithy-runtime-api = "1.6.1"
+aws-smithy-types = "1.1.10"
+axum = { version = "0.7.7", default-features = false, features = ["http1", "http2", "json", "macros", "query", "tokio", "tower-log", "tracing"] }
+base64 = "0.22.1"
+migrator = { path = "migrator" }
+serde = { version = "1.0.202", features = ["derive"] }
+serde_json = "1.0.117"
+surrealdb = { version = "2.3.7", features = ["kv-rocksdb", "rustls"] }
+tokio = { version = "1.37.0", default-features = false, features = ["macros", "rt-multi-thread"] }
+tracing = { version = "0.1.40", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+
+[package]
+name = "archodex-backend"
+version.workspace = true
+edition.workspace = true
+
+[features]
+archodex-com = ["dep:archodex-com", "archodex-com/archodex-com"]
+
+[dependencies]
+aes-gcm.workspace = true
+archodex-com = { path = "archodex-com", optional = true }
+archodex-error.workspace = true
+axum.workspace = true
+axum-extra = { version = "0.9.4", default-features = false }
+axum-macros = "0.4.1"
+base64.workspace = true
+chrono = { version = "0.4.38", default-features = false, features = ["std"] }
+hex = { version = "0.4.3", features = ["serde"] }
+josekit = { version = "0.10.0", default-features = false, features = ["vendored"] }
+migrator.workspace = true
+prost = "0.13.4"
+rand = "0.8.5"
+reqwest = { version = "0.12.9", default-features = false, features = ["http2", "rustls-tls"] }
+serde.workspace = true
+serde_json.workspace = true
+surrealdb.workspace = true
+tokio.workspace = true
+tower = { version = "0.5.1", default-features = false }
+tower-http = { version = "0.5.2", default-features = false, features = ["cors", "trace"] }
+tracing.workspace = true
+
+[build-dependencies]
+prost-build = "0.13.4"

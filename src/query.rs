@@ -1,13 +1,13 @@
-use axum::{extract::Path, Extension, Json};
+use axum::{Extension, Json, extract::Path};
 use serde::{Deserialize, Serialize};
-use surrealdb::{engine::any::Any, Surreal};
+use surrealdb::{Surreal, engine::any::Any};
 
 use crate::{
+    Result,
     db::{BeginReadonlyStatement, QueryCheckFirstRealError},
     event::Event,
     global_container::GlobalContainer,
     resource::Resource,
-    Result,
 };
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]

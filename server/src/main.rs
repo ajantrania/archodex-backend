@@ -35,7 +35,7 @@ fn setup_logging() {
             .init();
     } else {
         fmt.with_ansi(false).init();
-    };
+    }
 }
 
 fn main() -> anyhow::Result<()> {

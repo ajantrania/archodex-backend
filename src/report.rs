@@ -163,6 +163,7 @@ fn upsert_resource_tree_node<'a>(
     query
 }
 
+#[allow(clippy::too_many_lines)]
 fn upsert_events(mut query: Query<'_, Any>, report: EventCapture) -> Query<'_, Any> {
     let first_seen_at = report
         .events
@@ -284,7 +285,6 @@ fn upsert_events(mut query: Query<'_, Any>, report: EventCapture) -> Query<'_, A
     query
 }
 
-#[axum::debug_handler]
 pub(crate) async fn report(
     Extension(db): Extension<Surreal<Any>>,
     Json(req): Json<Request>,

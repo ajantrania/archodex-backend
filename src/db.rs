@@ -84,21 +84,20 @@ pub(crate) async fn db_for_customer_data_account(
 
         let mut dbs_by_url = DBS_BY_URL.write().await;
 
-        match dbs_by_url.get(service_data_surrealdb_url) {
-            Some(db) => db.clone(),
-            None => {
-                let db = surrealdb::engine::any::connect((
-                    service_data_surrealdb_url,
-                    Config::default()
-                        .capabilities(Capabilities::default().with_live_query_notifications(false))
-                        .strict(),
-                ))
-                .await?;
+        if let Some(db) = dbs_by_url.get(service_data_surrealdb_url) {
+            db.clone()
+        } else {
+            let db = surrealdb::engine::any::connect((
+                service_data_surrealdb_url,
+                Config::default()
+                    .capabilities(Capabilities::default().with_live_query_notifications(false))
+                    .strict(),
+            ))
+            .await?;
 
-                dbs_by_url.insert(service_data_surrealdb_url.to_string(), db.clone());
+            dbs_by_url.insert(service_data_surrealdb_url.to_string(), db.clone());
 
-                db
-            }
+            db
         }
     };
 

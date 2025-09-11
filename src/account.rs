@@ -43,7 +43,7 @@ impl Account {
             account_id
         } else {
             rand::thread_rng()
-                .gen_range::<u64, _>(1000000000..=9999999999)
+                .gen_range::<u64, _>(1_000_000_000..=9_999_999_999)
                 .to_string()
         };
 
@@ -105,9 +105,9 @@ impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::
         self
             .query(format!("CREATE ${account_binding} CONTENT {{ endpoint: ${endpoint_binding}, service_data_surrealdb_url: ${service_data_surrealdb_url_binding}, salt: ${salt_binding} }} RETURN NONE"))
             .bind((account_binding, surrealdb::sql::Thing::from(account)))
-            .bind((endpoint_binding, account.endpoint.to_owned()))
-            .bind((service_data_surrealdb_url_binding, account.service_data_surrealdb_url.to_owned()))
-            .bind((salt_binding, surrealdb::sql::Bytes::from(account.salt.to_owned())))
+            .bind((endpoint_binding, account.endpoint.clone()))
+            .bind((service_data_surrealdb_url_binding, account.service_data_surrealdb_url.clone()))
+            .bind((salt_binding, surrealdb::sql::Bytes::from(account.salt.clone())))
     }
 
     fn add_account_access_for_user(
@@ -138,6 +138,6 @@ impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::
 
 impl From<&Account> for surrealdb::sql::Thing {
     fn from(account: &Account) -> surrealdb::sql::Thing {
-        surrealdb::sql::Thing::from(("account", surrealdb::sql::Id::String(account.id.to_owned())))
+        surrealdb::sql::Thing::from(("account", surrealdb::sql::Id::String(account.id.clone())))
     }
 }

@@ -32,7 +32,7 @@ async fn main() {
     // Check if we already have this archive
     if !archive_path.exists() {
         // Get GitHub client with authentication
-        let octocrab = match create_authenticated_client().await {
+        let octocrab = match create_authenticated_client() {
             Ok(client) => client,
             Err(e) => {
                 println!("cargo:warning=Failed to authenticate with GitHub: {e}");
@@ -51,7 +51,10 @@ async fn main() {
 
     // Extract the archive
     if let Err(e) = extract_archive(&archive_path, &manifest_dir) {
-        panic!("Failed to extract archive at {archive_path:?}: {e}");
+        panic!(
+            "Failed to extract archive at '{}': {e}",
+            archive_path.display()
+        );
     }
 
     // Clean up old archives
@@ -64,7 +67,7 @@ async fn main() {
     }
 }
 
-async fn create_authenticated_client() -> Result<octocrab::Octocrab, Box<dyn std::error::Error>> {
+fn create_authenticated_client() -> Result<octocrab::Octocrab, Box<dyn std::error::Error>> {
     // First try standard environment variables
     if let Ok(token) = env::var("GITHUB_TOKEN").or_else(|_| env::var("GH_TOKEN")) {
         return Ok(octocrab::Octocrab::builder()
@@ -200,12 +203,12 @@ fn extract_archive(
                 // Compare with existing content
                 match fs::read(&dest_path) {
                     Ok(existing_content) => {
-                        if existing_content != new_content {
+                        if existing_content == new_content {
+                            false
+                        } else {
                             println!(
                                 "cargo:warning=File {relative_path:?} is different than mainline"
                             );
-                            false
-                        } else {
                             false
                         }
                     }

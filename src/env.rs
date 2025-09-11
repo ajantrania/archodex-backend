@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::LazyLock};
+use std::sync::LazyLock;
 
 pub struct Env {
     port: u16,
@@ -100,17 +100,20 @@ impl Env {
             }
         });
 
-        ENV.deref()
+        &ENV
     }
 
+    #[must_use]
     pub fn port() -> u16 {
         Self::get().port
     }
 
+    #[must_use]
     pub fn archodex_domain() -> &'static str {
         Self::get().archodex_domain.as_str()
     }
 
+    #[must_use]
     pub fn accounts_surrealdb_url() -> &'static str {
         Self::get().accounts_surrealdb_url.as_str()
     }
@@ -120,6 +123,7 @@ impl Env {
         Self::get().surrealdb_url.as_str()
     }
 
+    #[must_use]
     pub fn surrealdb_creds() -> Option<surrealdb::opt::auth::Root<'static>> {
         Self::get().surrealdb_creds
     }
@@ -136,6 +140,7 @@ impl Env {
         Self::get().cognito_client_id.as_str()
     }
 
+    #[allow(clippy::unused_async)]
     pub(crate) async fn api_private_key() -> &'static aes_gcm::Key<aes_gcm::Aes128Gcm> {
         #[cfg(not(feature = "archodex-com"))]
         {

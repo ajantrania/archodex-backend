@@ -53,10 +53,10 @@ impl<'de> Deserialize<'de> for Event {
                         "resource" if resource.is_none() => resource = Some(map.next_value()?),
                         "resource" => Err(serde::de::Error::duplicate_field("resource"))?,
                         "principal_chains" if principal_chains.is_none() => {
-                            principal_chains = Some(map.next_value()?)
+                            principal_chains = Some(map.next_value()?);
                         }
                         "principal_chains" => {
-                            Err(serde::de::Error::duplicate_field("principal_chains"))?
+                            Err(serde::de::Error::duplicate_field("principal_chains"))?;
                         }
                         "has_direct_principal_chain" => {
                             map.next_value::<serde::de::IgnoredAny>()?;

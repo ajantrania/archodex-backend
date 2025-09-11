@@ -1,0 +1,43 @@
+name: Cargo Clippy and Format Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint-and-type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install mold
+        uses: rui314/setup-mold@v1
+
+      - name: Install development packages
+        run: |-
+          # Skip installing package docs to improve GHA ubuntu times
+          sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null << 'EOF'
+          path-exclude /usr/share/doc/*
+          path-exclude /usr/share/man/*
+          path-exclude /usr/share/info/*
+          EOF
+
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang protobuf-compiler
+
+      - name: Install Rust toolchain
+        uses: moonrepo/setup-rust@v1
+        with:
+          components: clippy,rustfmt
+
+      - name: Cargo Clippy Check
+        run: cargo clippy --workspace --keep-going --all-targets --exclude archodex-com --no-default-features -- --deny clippy::pedantic
+
+      - name: Cargo Format Check
+        # cargo fmt doesn't have an --exclude or similar argument to exclude the archodex-com package, so we have to 
+        # list all other packages to check instead of using --all
+        run: cargo fmt --check --package archodex-backend --package archodex-error --package lambda --package migrator --package server

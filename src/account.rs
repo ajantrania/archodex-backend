@@ -11,14 +11,6 @@ use crate::{
 };
 use archodex_error::anyhow::{self, bail};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct ServiceDataLocation {
-    r#type: String,
-    partition: String,
-    region: String,
-    account_id: String,
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct Account {
     #[serde(deserialize_with = "surrealdb_deserializers::string::deserialize")]

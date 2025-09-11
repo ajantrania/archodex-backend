@@ -71,7 +71,8 @@ pub(crate) mod u32 {
                         &self,
                     ))
                 } else {
-                    Ok(v as u32)
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    Ok(v as Self::Value)
                 }
             }
 
@@ -95,7 +96,7 @@ pub(crate) mod u32 {
 pub(crate) mod uuid {
     use std::marker::PhantomData;
 
-    use serde::{de::VariantAccess, Deserialize};
+    use serde::{Deserialize, de::VariantAccess};
     use surrealdb::Uuid;
 
     pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>

@@ -50,7 +50,7 @@ impl From<ReportApiKey> for ReportApiKeyPublic {
 impl ReportApiKey {
     pub(crate) fn new(description: Option<String>, created_by: User) -> Self {
         Self {
-            id: rand::thread_rng().gen_range::<u32, _>(100000..=999999),
+            id: rand::thread_rng().gen_range::<u32, _>(100_000..=999_999),
             description,
             created_at: None,
             created_by,
@@ -78,7 +78,7 @@ impl ReportApiKey {
         let aad = proto::ReportApiKeyEncryptedAad {
             key_id: self.id,
             endpoint: Env::endpoint().to_owned(),
-            account_salt: account_salt.to_owned(),
+            account_salt: account_salt.clone(),
         };
 
         let encrypted_account_id = cipher
@@ -92,7 +92,7 @@ impl ReportApiKey {
             .map_err(|err| anyhow!("Failed to encrypt account ID: {err}"))?;
 
         let report_api_key = proto::ReportApiKey {
-            report_api_key_version: 1,
+            version: 1,
             endpoint: Env::endpoint().to_owned(),
             account_salt,
             nonce: nonce.as_slice().to_vec(),
@@ -126,7 +126,7 @@ impl ReportApiKey {
             .context("Invalid report key value: Key ID is not a number")?;
 
         ensure!(
-            (100000..=999999).contains(&key_id),
+            (100_000..=999_999).contains(&key_id),
             "Invalid report key value: Key ID is out of range"
         );
 
@@ -179,7 +179,7 @@ impl ReportApiKey {
         .context("Invalid report key value: Failed to decode decrypted message as protobuf")?;
 
         ensure!(
-            encrypted_contents.account_id >= 1000000000,
+            encrypted_contents.account_id >= 1_000_000_000,
             "Invalid report key value: Account ID is out of range"
         );
 
@@ -229,7 +229,7 @@ impl<'r, C: surrealdb::Connection> ReportApiKeyQueries<'r, C> for surrealdb::met
         self
             .query(format!("CREATE ${report_api_key_binding} CONTENT {{ description: ${description_binding}, created_by: ${created_by_binding} }}"))
             .bind((report_api_key_binding, surrealdb::sql::Thing::from(report_api_key)))
-            .bind((description_binding, report_api_key.description.to_owned()))
+            .bind((description_binding, report_api_key.description.clone()))
             .bind((created_by_binding, surrealdb::sql::Thing::from(&report_api_key.created_by)))
     }
 
@@ -248,7 +248,7 @@ impl<'r, C: surrealdb::Connection> ReportApiKeyQueries<'r, C> for surrealdb::met
             report_api_key_binding,
             surrealdb::sql::Thing::from((
                 "report_api_key",
-                surrealdb::sql::Id::from(report_api_key_id as i64),
+                surrealdb::sql::Id::from(i64::from(report_api_key_id)),
             )),
         ))
         .bind((revoked_by_binding, surrealdb::sql::Thing::from(revoked_by)))
@@ -267,7 +267,7 @@ impl<'r, C: surrealdb::Connection> ReportApiKeyQueries<'r, C> for surrealdb::met
             report_api_key_binding,
             surrealdb::sql::Thing::from((
                 "report_api_key",
-                surrealdb::sql::Id::from(report_api_key_id as i64),
+                surrealdb::sql::Id::from(i64::from(report_api_key_id)),
             )),
         ))
     }
@@ -279,7 +279,7 @@ impl From<&ReportApiKey> for surrealdb::sql::Thing {
     fn from(report_api_key: &ReportApiKey) -> Self {
         Self::from((
             "report_api_key",
-            surrealdb::sql::Id::Number(report_api_key.id as i64),
+            surrealdb::sql::Id::Number(i64::from(report_api_key.id)),
         ))
     }
 }

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use axum::{extract::Query, Extension, Json};
+use axum::{Extension, Json, extract::Query};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use surrealdb::{engine::any::Any, Surreal};
+use surrealdb::{Surreal, engine::any::Any};
 
 use archodex_error::{anyhow, bad_request, bail, ensure, not_found};
 
@@ -30,24 +30,31 @@ impl TryFrom<surrealdb::sql::Object> for PrincipalChainIdPart {
     type Error = anyhow::Error;
 
     fn try_from(mut value: surrealdb::sql::Object) -> Result<Self, Self::Error> {
-        let id = match value.remove("id") {
-            Some(id) => id,
-            None => bail!("PrincipalChainIdPart::try_from::<surrealdb::sql::Object> called with an object missing the `id` key"),
+        let Some(id) = value.remove("id") else {
+            bail!(
+                "PrincipalChainIdPart::try_from::<surrealdb::sql::Object> called with an object missing the `id` key"
+            )
         };
 
         let id = match id {
             surrealdb::sql::Value::Array(id) => ResourceId::try_from(id)?,
-            _ => bail!("PrincipalChainIdPart::try_from::<surrealdb::sql::Object> called with an object with a non-Array `id` value"),
+            _ => bail!(
+                "PrincipalChainIdPart::try_from::<surrealdb::sql::Object> called with an object with a non-Array `id` value"
+            ),
         };
 
         let event = match value.remove("event") {
             Some(surrealdb::sql::Value::Strand(event)) => Some(String::from(event)),
-            Some(surrealdb::sql::Value::None) => None,
-            None => None,
-            _ => bail!("PrincipalChainIdPart::try_from::<surrealdb::sql::Object> called with an object containing an invalid `event` value"),
+            Some(surrealdb::sql::Value::None) | None => None,
+            _ => bail!(
+                "PrincipalChainIdPart::try_from::<surrealdb::sql::Object> called with an object containing an invalid `event` value"
+            ),
         };
 
-        ensure!(value.is_empty(), "PrincipalChainIdPart::try_from::<surrealdb::sql::Object> called with an invalid object containing extra keys");
+        ensure!(
+            value.is_empty(),
+            "PrincipalChainIdPart::try_from::<surrealdb::sql::Object> called with an invalid object containing extra keys"
+        );
 
         Ok(PrincipalChainIdPart { id, event })
     }

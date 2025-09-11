@@ -19,7 +19,7 @@ pub mod router;
 
 use std::sync::atomic::AtomicU64;
 
-pub(crate) use archodex_error::*;
+pub(crate) use archodex_error::Result;
 
 static NEXT_BINDING_VALUE: AtomicU64 = AtomicU64::new(0);
 

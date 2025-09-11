@@ -43,7 +43,7 @@ fn main() -> Result<(), io::Error> {
             lambda_tx
                 .send_blocking(response)
                 .expect("send lambda result");
-        };
+        }
     });
 
     // Run the mock runtime to completion.

@@ -1,3 +1,11 @@
 {
   "editor.formatOnSave": true,
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.check.extraArgs": [
+    "--exclude",
+    "archodex-com",
+    "--",
+    "--warn",
+    "clippy::pedantic",
+  ],
 }

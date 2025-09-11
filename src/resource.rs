@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use axum::{Extension, Json};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use surrealdb::{engine::any::Any, Surreal};
+use surrealdb::{Surreal, engine::any::Any};
 
 use archodex_error::{anyhow, bail, ensure};
 
@@ -24,18 +24,25 @@ impl TryFrom<surrealdb::sql::Array> for ResourceIdPart {
     type Error = anyhow::Error;
 
     fn try_from(mut value: surrealdb::sql::Array) -> Result<Self, Self::Error> {
-        ensure!(value.len() == 2, "ResourceIdPart::from(surrealdb::sql::Array) called with an array with a length other than two");
+        ensure!(
+            value.len() == 2,
+            "ResourceIdPart::from(surrealdb::sql::Array) called with an array with a length other than two"
+        );
 
         let id = if let surrealdb::sql::Value::Strand(id) = value.pop().unwrap() {
             id.into()
         } else {
-            bail!("ResourceIdPart::from(surrealdb::sql::Array) called with an array with a non-strand second element");
+            bail!(
+                "ResourceIdPart::from(surrealdb::sql::Array) called with an array with a non-strand second element"
+            );
         };
 
         let r#type = if let surrealdb::sql::Value::Strand(r#type) = value.pop().unwrap() {
             r#type.into()
         } else {
-            bail!("ResourceIdPart::from(surrealdb::sql::Array) called with an array with a non-strand first element");
+            bail!(
+                "ResourceIdPart::from(surrealdb::sql::Array) called with an array with a non-strand first element"
+            );
         };
 
         Ok(ResourceIdPart { r#type, id })

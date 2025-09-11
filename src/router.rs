@@ -5,7 +5,7 @@ use axum::{
         header::{AUTHORIZATION, CONTENT_TYPE},
     },
     middleware,
-    routing::*,
+    routing::{delete, get, post},
 };
 use tower::ServiceBuilder;
 use tower_http::{
@@ -22,6 +22,9 @@ use crate::{
     principal_chain, query, report, report_api_keys, resource,
 };
 
+/// # Panics
+///
+/// Will panic if `Env::archodex_domain()` is not a valid domain.
 pub fn router() -> Router {
     let cors_layer = CorsLayer::new()
         .allow_methods(AllowMethods::mirror_request())

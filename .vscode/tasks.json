@@ -15,15 +15,7 @@
     },
     {
       "type": "shell",
-      "command": "act --platform ubuntu-latest=catthehacker/ubuntu:act-24.04 --bind --artifact-server-path /tmp/act-artifacts --workflows .github/workflows/build-dev.yml --matrix arch:aarch64 --job build",
-      "options": {
-        "shell": {
-          "executable": "/bin/bash",
-          "args": [
-            "-c"
-          ]
-        }
-      },
+      "command": "act --platform ubuntu-latest=catthehacker/ubuntu:act-24.04 --platform linux/amd64 --artifact-server-path /tmp/act-artifacts --workflows .github/workflows/build-dev.yml --use-new-action-cache --reuse",
       "problemMatcher": [],
       "group": {
         "kind": "build"

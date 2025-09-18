@@ -8,4 +8,5 @@
     "--warn",
     "clippy::pedantic",
   ],
+  "rust-analyzer.cargo.noDefaultFeatures": true,
 }

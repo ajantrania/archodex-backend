@@ -6,6 +6,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   ARCHODEX_COM_TRIGGER_TOKEN_EXISTS: ${{ secrets.ARCHODEX_COM_TRIGGER_TOKEN != '' }}
 

@@ -17,9 +17,9 @@ RUN set -eux; \
   arm64)  T=aarch64 ;; \
   *)      echo "unsupported TARGETARCH=${TARGETARCH}"; exit 1 ;; \
   esac; \
-  install -m 0755 "target-${T}/${T}-unknown-linux-musl/release/server" /server
+  install -m 0755 "target/${T}-unknown-linux-gnu/release/server" /server
 
-FROM cgr.dev/chainguard/static:latest
+FROM cgr.dev/chainguard/glibc-dynamic:latest
 COPY --from=pick /server /
 
 ENTRYPOINT ["/server"]

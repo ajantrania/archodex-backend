@@ -40,26 +40,25 @@ impl<'de> Deserialize<'de> for Event {
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
-                        "id" => {
+                        "id" | "has_direct_principal_chain" => {
                             map.next_value::<serde::de::IgnoredAny>()?;
                         }
-                        "in" if principal.is_none() => principal = Some(map.next_value()?),
+                        "in" | "principal" if principal.is_none() => {
+                            principal = Some(map.next_value()?);
+                        }
                         "in" => Err(serde::de::Error::duplicate_field("in"))?,
-                        "principal" if principal.is_none() => principal = Some(map.next_value()?),
                         "principal" => Err(serde::de::Error::duplicate_field("principal"))?,
                         "type" => r#type = Some(map.next_value()?),
-                        "out" if resource.is_none() => resource = Some(map.next_value()?),
+                        "out" | "resource" if resource.is_none() => {
+                            resource = Some(map.next_value()?);
+                        }
                         "out" => Err(serde::de::Error::duplicate_field("out"))?,
-                        "resource" if resource.is_none() => resource = Some(map.next_value()?),
                         "resource" => Err(serde::de::Error::duplicate_field("resource"))?,
                         "principal_chains" if principal_chains.is_none() => {
                             principal_chains = Some(map.next_value()?);
                         }
                         "principal_chains" => {
                             Err(serde::de::Error::duplicate_field("principal_chains"))?;
-                        }
-                        "has_direct_principal_chain" => {
-                            map.next_value::<serde::de::IgnoredAny>()?;
                         }
                         "first_seen_at" => first_seen_at = Some(map.next_value()?),
                         "last_seen_at" => last_seen_at = Some(map.next_value()?),

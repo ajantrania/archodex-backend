@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint-and-type-check:
     runs-on: ubuntu-latest
@@ -14,12 +18,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install mold
-        uses: rui314/setup-mold@v1
-
-      - name: Install development packages
+      - name: Setup package repos
         run: |-
-          # Skip installing package docs to improve GHA ubuntu times
           sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null << 'EOF'
           path-exclude /usr/share/doc/*
           path-exclude /usr/share/man/*
@@ -27,7 +27,11 @@ jobs:
           EOF
 
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang protobuf-compiler
+
+      - name: Install development tools
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: mold protobuf-compiler
 
       - name: Install Rust toolchain
         uses: moonrepo/setup-rust@v1

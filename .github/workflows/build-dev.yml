@@ -6,6 +6,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   ACT: false
   AWS_PAGER: ""
@@ -19,19 +23,13 @@ jobs:
       packages: write
       attestations: write
       id-token: write
-    strategy:
-      matrix:
-        arch: [aarch64, x86_64]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install mold
-        uses: rui314/setup-mold@v1
-
-      - name: Install development packages
+      - name: Setup package repos
         run: |-
-          # Skip installing package docs to improve GHA ubuntu times
           sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null << 'EOF'
           path-exclude /usr/share/doc/*
           path-exclude /usr/share/man/*
@@ -39,26 +37,31 @@ jobs:
           EOF
 
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang protobuf-compiler
 
-      - name: Install Rust toolchain
+      - name: Install development tools
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: g++-aarch64-linux-gnu gcc-aarch64-linux-gnu libc6-dev-arm64-cross mold protobuf-compiler
+
+      - name: Setup linkers
+        run: |-
+          # <arch>-linux-gnu-gcc expects the mold linker to be at /usr/bin/<arch>-linux-gnu-ld.mold
+          sudo ln -sf /usr/bin/ld.mold /usr/bin/x86_64-linux-gnu-ld.mold
+          sudo ln -sf /usr/bin/ld.mold /usr/bin/aarch64-linux-gnu-ld.mold
+
+      - name: Install Rust toolchains
         uses: moonrepo/setup-rust@v1
         with:
-          targets: ${{ matrix.arch }}-unknown-linux-musl
-          cache-target: target-${{ matrix.arch }}
+          targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
+          cache-target: target
           target-dirs: .
-
-      - name: Install musl toolchain
-        uses: taiki-e/setup-cross-toolchain-action@v1
-        with:
-          target: ${{ matrix.arch }}-unknown-linux-musl
 
       - name: Build Server package
         run: |-
           cargo build \
             --release \
-            --target-dir target-${{ matrix.arch }} \
-            --target ${{ matrix.arch }}-unknown-linux-musl \
+            --target x86_64-unknown-linux-gnu \
+            --target aarch64-unknown-linux-gnu \
             --package server
 
       - name: Container metadata
@@ -67,6 +70,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          tags: type=ref,event=branch,prefix=branch-
 
       - name: Log in to the GitHub Container Registry
         if: env.ACT != 'true'
@@ -84,70 +88,11 @@ jobs:
         run: echo "OCI_REPO=ghcr.io/${GITHUB_REPOSITORY@L}" >> $GITHUB_ENV
 
       - name: Build and push container images
-        id: build
+        id: build-images
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/${{ matrix.arch }}
+          platforms: linux/amd64,linux/arm64
           tags: ${{ env.OCI_REPO }}
           labels: ${{ env.ACT != 'true' && steps.meta.outputs.labels }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=${{ env.ACT != 'true' }}
-
-      - name: Image digest
-        run: |-
-          mkdir -p ${{ runner.temp }}/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-${{ matrix.arch }}
-          path: ${{ runner.temp }}/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
-    steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/digests
-          pattern: digests-*
-          merge-multiple: true
-
-      - name: Login to Docker Hub
-        if: env.ACT != 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Extract metadata (tags, labels) for container images
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: type=ref,event=branch,prefix=branch-
-
-      - name: Create manifest list and push
-        working-directory: ${{ runner.temp }}/digests
-        run: |
-          OCI_REPO=ghcr.io/${GITHUB_REPOSITORY@L}
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf "${OCI_REPO}@sha256:%s " *)
-
-      - name: Inspect image
-        run: |
-          docker buildx imagetools inspect ${{ steps.meta.outputs.tags }}
+          push: ${{ env.ACT != 'true' }}

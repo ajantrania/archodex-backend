@@ -8,7 +8,7 @@ use surrealdb::{
     sql::statements::CommitStatement,
 };
 use tokio::sync::{OnceCell, RwLock};
-use tracing::{info, warn};
+use tracing::{info, instrument, warn};
 
 use crate::{
     Result,
@@ -38,6 +38,7 @@ impl surrealdb::opt::IntoQuery for BeginReadonlyStatement {
     }
 }
 
+#[instrument(err)]
 pub(crate) async fn migrate_service_data_database(
     service_data_surrealdb_url: &str,
     archodex_account_id: &str,
@@ -68,6 +69,7 @@ pub(crate) async fn migrate_service_data_database(
     Ok(())
 }
 
+#[instrument(err)]
 pub(crate) async fn db_for_customer_data_account(
     service_data_surrealdb_url: &str,
     archodex_account_id: &str,
@@ -114,6 +116,7 @@ pub(crate) async fn db_for_customer_data_account(
     Ok(db)
 }
 
+#[instrument(err, skip_all)]
 pub(crate) async fn db<A: AccountAuth>(
     Extension(auth): Extension<A>,
     mut req: Request,
@@ -143,6 +146,7 @@ pub(crate) async fn db<A: AccountAuth>(
     Ok(next.run(req).await)
 }
 
+#[instrument(err)]
 pub(crate) async fn accounts_db() -> anyhow::Result<Surreal<Any>> {
     static ACCOUNTS_DB: OnceCell<Surreal<Any>> = OnceCell::const_new();
 

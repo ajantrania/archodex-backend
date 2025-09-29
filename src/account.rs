@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use surrealdb::{Surreal, engine::any::Any};
+use tracing::instrument;
 
 use crate::{
     db::{db_for_customer_data_account, migrate_service_data_database},
@@ -38,6 +39,7 @@ impl From<Account> for AccountPublic {
 }
 
 impl Account {
+    #[instrument(err)]
     pub(crate) async fn new(endpoint: String, account_id: Option<String>) -> anyhow::Result<Self> {
         let id = if let Some(account_id) = account_id {
             account_id

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use axum::{
     Router,
     http::{
@@ -10,9 +12,10 @@ use axum::{
 use tower::ServiceBuilder;
 use tower_http::{
     cors::{AllowMethods, AllowOrigin, CorsLayer},
-    trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
-use tracing::Level;
+use tracing::{Level, Span, error_span};
+use uuid::Uuid;
 
 use crate::{
     accounts,
@@ -72,13 +75,42 @@ pub fn router() -> Router {
         .layer(ServiceBuilder::new().layer(middleware::from_fn(db::<ReportApiKeyAuth>)))
         .layer(ServiceBuilder::new().layer(middleware::from_fn(report_api_key_auth)));
 
+    let default_on_response_trace_handler = DefaultOnResponse::new().level(Level::INFO);
+
     unauthed_router
         .merge(dashboard_authed_router)
         .merge(report_api_key_authed_router)
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .make_span_with(|request: &axum::http::Request<_>| {
+                    use tracing::field::Empty;
+
+                    let span = error_span!(
+                        "request",
+                        method = %request.method(),
+                        uri = %request.uri(),
+                        auth = Empty,
+                        request_id = %Uuid::now_v7(),
+                        "X-Request-ID" = Empty,
+                        version = ?request.version(),
+                    );
+
+                    if let Some(x_request_id) = request.headers().get("X-Request-ID") {
+                        span.record("X-Request-ID", tracing::field::debug(x_request_id));
+                    }
+
+                    span
+                })
                 .on_request(DefaultOnRequest::new().level(Level::INFO))
-                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+                .on_response(
+                    |response: &axum::http::Response<_>, latency: Duration, span: &Span| {
+                        use tower_http::trace::OnResponse;
+
+                        // Skip logging 5xx responses. These are already logged by the default on_failure handler.
+                        if !response.status().is_server_error() {
+                            default_on_response_trace_handler.on_response(response, latency, span);
+                        }
+                    },
+                ),
         )
 }

@@ -1,6 +1,7 @@
 use axum::{Extension, Json, extract::Path};
 use serde::{Deserialize, Serialize};
 use surrealdb::{Surreal, engine::any::Any};
+use tracing::instrument;
 
 use crate::{
     Result,
@@ -26,6 +27,7 @@ pub(super) struct QueryResponse {
     events: Option<Vec<Event>>,
 }
 
+#[instrument(err, skip_all)]
 pub(super) async fn query(
     Path((_account_id, r#type)): Path<(String, QueryType)>,
     Extension(db): Extension<Surreal<Any>>,

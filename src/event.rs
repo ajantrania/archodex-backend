@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use crate::{principal_chain::PrincipalChainId, resource::ResourceId};
 
@@ -27,6 +28,7 @@ impl<'de> Deserialize<'de> for Event {
                 formatter.write_str("an event or a database event record")
             }
 
+            #[instrument(err, skip_all)]
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::MapAccess<'de>,

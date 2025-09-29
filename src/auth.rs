@@ -14,7 +14,7 @@ use josekit::{
 use reqwest::header::AUTHORIZATION;
 use surrealdb::{Surreal, Uuid, engine::any::Any, sql::statements::CommitStatement};
 use tokio::sync::OnceCell;
-use tracing::{info, warn};
+use tracing::{Instrument as _, error_span, info, instrument, warn};
 
 use crate::{
     Result,

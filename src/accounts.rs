@@ -1,6 +1,7 @@
 use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use surrealdb::sql::statements::{BeginStatement, CommitStatement};
+use tracing::instrument;
 
 #[cfg(not(feature = "archodex-com"))]
 use surrealdb::{Surreal, engine::any::Any};
@@ -43,6 +44,7 @@ pub(super) struct CreateAccountRequest {
     endpoint: Option<String>,
 }
 
+#[instrument(err, skip(auth))]
 pub(crate) async fn create_account(
     Extension(auth): Extension<DashboardAuth>,
     Json(req): Json<CreateAccountRequest>,
@@ -59,6 +61,7 @@ pub(crate) async fn create_account(
 }
 
 #[cfg(not(feature = "archodex-com"))]
+#[instrument(err, skip_all)]
 pub(crate) async fn create_local_account(
     auth: DashboardAuth,
     req: CreateAccountRequest,
@@ -88,6 +91,7 @@ pub(crate) async fn create_local_account(
 }
 
 #[cfg(not(feature = "archodex-com"))]
+#[instrument(err, skip_all)]
 async fn verify_no_local_accounts_exist(accounts_db: &Surreal<Any>) -> Result<()> {
     #[cfg(not(feature = "archodex-com"))]
     #[derive(Deserialize, PartialEq)]

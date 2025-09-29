@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use surrealdb::{Surreal, engine::any::Any};
 
 use archodex_error::{anyhow, bail, ensure};
+use tracing::instrument;
 
 #[derive(Clone, Debug, Eq, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -23,6 +24,7 @@ impl From<ResourceIdPart> for surrealdb::sql::Value {
 impl TryFrom<surrealdb::sql::Array> for ResourceIdPart {
     type Error = anyhow::Error;
 
+    #[instrument(err)]
     fn try_from(mut value: surrealdb::sql::Array) -> Result<Self, Self::Error> {
         ensure!(
             value.len() == 2,
@@ -63,6 +65,7 @@ impl<'de> Deserialize<'de> for ResourceIdPart {
                 formatter.write_str("a resource ID part")
             }
 
+            #[instrument(err, skip_all)]
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::MapAccess<'de>,
@@ -96,6 +99,7 @@ impl<'de> Deserialize<'de> for ResourceIdPart {
                 Ok(ResourceIdPart { r#type, id })
             }
 
+            #[instrument(err, skip_all)]
             fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::SeqAccess<'de>,
@@ -169,6 +173,7 @@ pub(crate) fn surrealdb_thing_from_resource_id(value: ResourceId) -> surrealdb::
 impl TryFrom<surrealdb::sql::Array> for ResourceId {
     type Error = anyhow::Error;
 
+    #[instrument(err)]
     fn try_from(value: surrealdb::sql::Array) -> Result<Self, Self::Error> {
         Ok(ResourceId(
             value.into_iter().map(|part| match part {
@@ -202,6 +207,7 @@ impl<'de> Deserialize<'de> for ResourceId {
                 formatter.write_str("a resource ID")
             }
 
+            #[instrument(err, skip_all)]
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::SeqAccess<'de>,
@@ -215,6 +221,7 @@ impl<'de> Deserialize<'de> for ResourceId {
                 Ok(ResourceId(parts))
             }
 
+            #[instrument(err, skip_all)]
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::MapAccess<'de>,
@@ -300,6 +307,7 @@ pub(super) struct SetTagsRequest {
     environments: HashSet<String>,
 }
 
+#[instrument(err, skip(db))]
 pub(super) async fn set_environments(
     Extension(db): Extension<Surreal<Any>>,
     Json(req): Json<SetTagsRequest>,

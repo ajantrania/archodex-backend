@@ -10,7 +10,7 @@ use surrealdb::{
     method::Query,
     sql::statements::{BeginStatement, CommitStatement, InsertStatement, UpdateStatement},
 };
-use tracing::info;
+use tracing::{info, instrument};
 
 use crate::{
     Result,
@@ -83,6 +83,7 @@ pub(super) struct Request {
     event_captures: Vec<EventCapture>,
 }
 
+#[instrument(skip_all)]
 fn upsert_resource_tree_node<'a>(
     mut query: Query<'a, Any>,
     prefix: &mut surrealdb::sql::Array,
@@ -164,6 +165,7 @@ fn upsert_resource_tree_node<'a>(
 }
 
 #[allow(clippy::too_many_lines)]
+#[instrument(skip_all)]
 fn upsert_events(mut query: Query<'_, Any>, report: EventCapture) -> Query<'_, Any> {
     let first_seen_at = report
         .events
@@ -285,6 +287,7 @@ fn upsert_events(mut query: Query<'_, Any>, report: EventCapture) -> Query<'_, A
     query
 }
 
+#[instrument(err, skip(db))]
 pub(crate) async fn report(
     Extension(db): Extension<Surreal<Any>>,
     Json(req): Json<Request>,

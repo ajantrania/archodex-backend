@@ -13,6 +13,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use archodex_error::anyhow::{self, Context as _, anyhow, bail, ensure};
+use tracing::instrument;
 
 use crate::{env::Env, next_binding, surrealdb_deserializers, user::User};
 
@@ -63,6 +64,7 @@ impl ReportApiKey {
         self.id
     }
 
+    #[instrument(err)]
     pub(crate) async fn generate_value(
         &self,
         account_id: &str,
@@ -108,6 +110,7 @@ impl ReportApiKey {
 
     // This method validates a report key value contains the correct endpoint and returns the account and key IDs. The
     // caller must still validate the key ID exists for the account and has not been revoked.
+    #[instrument(err, skip_all)]
     pub(crate) async fn validate_value(
         report_api_key_value: &str,
     ) -> anyhow::Result<(String, u32)> {

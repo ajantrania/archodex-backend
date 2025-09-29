@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use surrealdb::Uuid;
+use tracing::instrument;
 
 use crate::{
     Result,
@@ -22,6 +23,7 @@ impl User {
         Self { id }
     }
 
+    #[instrument(err)]
     pub(crate) async fn ensure_user_record_exists(&self) -> Result<()> {
         accounts_db()
             .await?
@@ -34,6 +36,7 @@ impl User {
     }
 
     #[cfg(feature = "archodex-com")]
+    #[instrument(err)]
     pub(crate) async fn has_user_account(&self) -> Result<bool> {
         #[derive(Deserialize)]
         struct HasAccountResults {
@@ -51,6 +54,7 @@ impl User {
             .has_user_account)
     }
 
+    #[instrument(err)]
     pub(crate) async fn list_accounts(&self) -> Result<Vec<Account>> {
         #[derive(Default, Deserialize)]
         struct ListAccountResults {

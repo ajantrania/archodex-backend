@@ -7,7 +7,7 @@ use surrealdb::{
     engine::any::Any,
     sql::statements::{BeginStatement, CommitStatement},
 };
-use tracing::info;
+use tracing::{info, instrument};
 
 use archodex_error::{
     anyhow::{Context as _, anyhow, bail},
@@ -27,6 +27,7 @@ pub(crate) struct ListReportApiKeysResponse {
     report_api_keys: Vec<ReportApiKeyPublic>,
 }
 
+#[instrument(err, skip_all)]
 pub(crate) async fn list_report_api_keys(
     Extension(db): Extension<Surreal<Any>>,
 ) -> Result<Json<ListReportApiKeysResponse>> {
@@ -44,7 +45,7 @@ pub(crate) async fn list_report_api_keys(
     Ok(Json(ListReportApiKeysResponse { report_api_keys }))
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct CreateReportApiKeyRequest {
     description: Option<String>,
 }
@@ -55,6 +56,7 @@ pub(crate) struct CreateReportApiKeyResponse {
     report_api_key_value: String,
 }
 
+#[instrument(err, skip(auth, db))]
 pub(crate) async fn create_report_api_key(
     Extension(auth): Extension<DashboardAuth>,
     Extension(db): Extension<Surreal<Any>>,
@@ -103,6 +105,7 @@ pub(crate) async fn create_report_api_key(
     }))
 }
 
+#[instrument(err, skip_all)]
 pub(crate) async fn revoke_report_api_key(
     Extension(auth): Extension<DashboardAuth>,
     Extension(db): Extension<Surreal<Any>>,

@@ -19,8 +19,8 @@ use uuid::Uuid;
 
 use crate::{
     accounts,
-    auth::{DashboardAuth, ReportApiKeyAuth, dashboard_auth, report_api_key_auth},
-    db::db,
+    auth::{DashboardAuth, ReportApiKeyAuth},
+    db::{dashboard_auth_account, report_api_key_account},
     env::Env,
     principal_chain, query, report, report_api_keys, resource,
 };
@@ -62,18 +62,19 @@ pub fn router() -> Router {
                 .route(
                     "/report_api_key/:report_api_key_id",
                     delete(report_api_keys::revoke_report_api_key),
-                ),
+                )
+                .route("/", delete(accounts::delete_account)),
         )
-        .layer(ServiceBuilder::new().layer(middleware::from_fn(db::<DashboardAuth>)))
+        .layer(ServiceBuilder::new().layer(middleware::from_fn(dashboard_auth_account)))
         .route("/accounts", get(accounts::list_accounts))
         .route("/accounts", post(accounts::create_account))
-        .layer(ServiceBuilder::new().layer(middleware::from_fn(dashboard_auth)))
+        .layer(ServiceBuilder::new().layer(middleware::from_fn(DashboardAuth::authenticate)))
         .layer(cors_layer.clone());
 
     let report_api_key_authed_router = Router::new()
         .route("/report", post(report::report))
-        .layer(ServiceBuilder::new().layer(middleware::from_fn(db::<ReportApiKeyAuth>)))
-        .layer(ServiceBuilder::new().layer(middleware::from_fn(report_api_key_auth)));
+        .layer(ServiceBuilder::new().layer(middleware::from_fn(report_api_key_account)))
+        .layer(ServiceBuilder::new().layer(middleware::from_fn(ReportApiKeyAuth::authenticate)));
 
     let default_on_response_trace_handler = DefaultOnResponse::new().level(Level::INFO);
 

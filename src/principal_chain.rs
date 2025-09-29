@@ -3,12 +3,11 @@ use std::collections::HashMap;
 use axum::{Extension, Json, extract::Query};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use surrealdb::{Surreal, engine::any::Any};
 
 use archodex_error::{anyhow, bad_request, bail, ensure, not_found};
 use tracing::instrument;
 
-use crate::{db::QueryCheckFirstRealError, resource::ResourceId};
+use crate::{account::Account, db::QueryCheckFirstRealError, resource::ResourceId};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct PrincipalChainIdPart {
@@ -201,9 +200,9 @@ pub(super) struct GetResponse {
     last_seen_at: DateTime<Utc>,
 }
 
-#[instrument(err, skip(db))]
+#[instrument(err, skip(account))]
 pub(super) async fn get(
-    Extension(db): Extension<Surreal<Any>>,
+    Extension(account): Extension<Account>,
     Query(GetRequest { id }): Query<GetRequest>,
 ) -> crate::Result<Json<GetResponse>> {
     let id: PrincipalChainId = match serde_json::from_str(&id) {
@@ -211,7 +210,9 @@ pub(super) async fn get(
         Err(err) => bad_request!("Invalid `id` query parameter: {err}"),
     };
 
-    let res = db
+    let res = account
+        .resources_db()
+        .await?
         .query("SELECT first_seen_at, last_seen_at FROM type::thing('principal_chain', $id)")
         .bind(("id", surrealdb::sql::Array::from(id)))
         .await?

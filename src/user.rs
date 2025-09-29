@@ -9,9 +9,6 @@ use crate::{
     surrealdb_deserializers,
 };
 
-#[cfg(feature = "archodex-com")]
-use archodex_error::anyhow::anyhow;
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct User {
     #[serde(deserialize_with = "surrealdb_deserializers::uuid::deserialize")]
@@ -37,21 +34,39 @@ impl User {
 
     #[cfg(feature = "archodex-com")]
     #[instrument(err)]
-    pub(crate) async fn has_user_account(&self) -> Result<bool> {
+    pub(crate) async fn next_account_id(&self) -> Result<String> {
+        use crate::env::Env;
+        use archodex_error::{anyhow::anyhow, conflict};
+        use rand::Rng as _;
+        use tracing::info;
+
         #[derive(Deserialize)]
-        struct HasAccountResults {
-            has_user_account: bool,
+        struct NumUserAccountsResults {
+            num_user_accounts: u32,
         }
 
-        Ok(accounts_db()
+        let NumUserAccountsResults { num_user_accounts } = accounts_db()
             .await?
-            .query("SELECT COUNT(->has_access->account) > 0 AS has_user_account FROM $user")
+            .query("SELECT COUNT(->has_access->(account WHERE deleted_at IS NONE)) AS num_user_accounts FROM ONLY $user")
             .bind(("user", surrealdb::sql::Thing::from(self)))
             .await?
             .check_first_real_error()?
-            .take::<Option<HasAccountResults>>(0)?
-            .ok_or_else(|| anyhow!("Failed to query whether user has an account"))?
-            .has_user_account)
+            .take::<Option<NumUserAccountsResults>>(0)?
+            .ok_or_else(|| anyhow!("Failed to query whether user has an account"))?;
+
+        info!(num_user_accounts, "Retrieved number of accounts for user");
+
+        if num_user_accounts >= Env::user_account_limit() {
+            conflict!("User account limit exceeded");
+        }
+
+        let account_id = rand::thread_rng()
+            .gen_range::<u64, _>(1_000_000_000..=9_999_999_999)
+            .to_string();
+
+        info!(account_id, "Generated new account ID");
+
+        Ok(account_id)
     }
 
     #[instrument(err)]
@@ -63,7 +78,7 @@ impl User {
 
         Ok(accounts_db()
             .await?
-            .query("SELECT ->has_access->account.* AS accounts FROM ONLY $user")
+            .query("SELECT ->has_access->(account WHERE deleted_at IS NONE).* AS accounts FROM ONLY $user")
             .bind(("user", surrealdb::sql::Thing::from(self)))
             .await?
             .check_first_real_error()?

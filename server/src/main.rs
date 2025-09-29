@@ -38,7 +38,36 @@ fn setup_logging() {
     }
 }
 
+/// Sets up surrealdb environment variables for configuration settings that cannot be modified through other means.
+///
+/// # Safety
+///
+/// This function is marked as `unsafe` because it modifies environment variables using `std::env::set_var()`, which is
+/// inherently unsafe in multi-threaded contexts. Concurrent access to environment variables from multiple threads can
+/// lead to data races and undefined behavior. See the documentation for `std::env::set_var()` for more details about
+/// the safety requirements and potential issues.
+///
+/// This function should only be called during application initialization, before any additional threads are spawned, to
+/// avoid race conditions.
+unsafe fn setup_surrealdb_env_vars() {
+    // Set the `SURREAL_SYNC_DATA` environment variable is to "true" if it hasn't been set already. This forces
+    // SurrealDB to operate in synchronous data mode to prioritize consistency of writes over raw speed of transactions.
+    //
+    // This is primarily a concern when both the process and the OS die (e.g. power failure) and flushes to the OS fail
+    // to reach the disk. That said, self-hosted Archodex instances using RocksDB or SurrealKV, which are the only two
+    // engines this affects, should not be resource constrained to the point that flushing data to disk causes a
+    // significant performance concern.
+    if std::env::var("SURREAL_SYNC_DATA").is_err() {
+        unsafe {
+            std::env::set_var("SURREAL_SYNC_DATA", "true");
+        }
+    }
+}
+
 fn main() -> anyhow::Result<()> {
+    // This is safe to call first thing at process start before any threads may be spawned (e.g. by tokio)
+    unsafe { setup_surrealdb_env_vars() };
+
     setup_logging();
 
     tokio::runtime::Builder::new_multi_thread()

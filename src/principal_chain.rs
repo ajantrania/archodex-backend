@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use axum::{Extension, Json, extract::Query};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use surrealdb::{Surreal, engine::any::Any};
 
 use archodex_error::{anyhow, bad_request, bail, ensure, not_found};
+use tracing::instrument;
 
-use crate::{db::QueryCheckFirstRealError, resource::ResourceId};
+use crate::{account::Account, db::QueryCheckFirstRealError, resource::ResourceId};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct PrincipalChainIdPart {
@@ -29,6 +29,7 @@ impl From<PrincipalChainIdPart> for surrealdb::sql::Value {
 impl TryFrom<surrealdb::sql::Object> for PrincipalChainIdPart {
     type Error = anyhow::Error;
 
+    #[instrument(err)]
     fn try_from(mut value: surrealdb::sql::Object) -> Result<Self, Self::Error> {
         let Some(id) = value.remove("id") else {
             bail!(
@@ -74,6 +75,7 @@ impl std::ops::Deref for PrincipalChainId {
 impl TryFrom<surrealdb::sql::Array> for PrincipalChainId {
     type Error = anyhow::Error;
 
+    #[instrument(err)]
     fn try_from(value: surrealdb::sql::Array) -> Result<Self, Self::Error> {
         Ok(PrincipalChainId(
             value.into_iter().map(|part| match part {
@@ -110,6 +112,7 @@ impl<'de> Deserialize<'de> for PrincipalChainId {
                 formatter.write_str("a PrincipalChainId")
             }
 
+            #[instrument(err, skip_all)]
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::SeqAccess<'de>,
@@ -123,6 +126,7 @@ impl<'de> Deserialize<'de> for PrincipalChainId {
                 Ok(PrincipalChainId(parts))
             }
 
+            #[instrument(err, skip_all)]
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::MapAccess<'de>,
@@ -196,8 +200,9 @@ pub(super) struct GetResponse {
     last_seen_at: DateTime<Utc>,
 }
 
+#[instrument(err, skip(account))]
 pub(super) async fn get(
-    Extension(db): Extension<Surreal<Any>>,
+    Extension(account): Extension<Account>,
     Query(GetRequest { id }): Query<GetRequest>,
 ) -> crate::Result<Json<GetResponse>> {
     let id: PrincipalChainId = match serde_json::from_str(&id) {
@@ -205,7 +210,9 @@ pub(super) async fn get(
         Err(err) => bad_request!("Invalid `id` query parameter: {err}"),
     };
 
-    let res = db
+    let res = account
+        .resources_db()
+        .await?
         .query("SELECT first_seen_at, last_seen_at FROM type::thing('principal_chain', $id)")
         .bind(("id", surrealdb::sql::Array::from(id)))
         .await?

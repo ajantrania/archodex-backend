@@ -1,5 +1,6 @@
 pub(crate) mod string {
     use serde::Deserialize;
+    use tracing::instrument;
 
     pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<String, D::Error>
     where
@@ -28,6 +29,7 @@ pub(crate) mod string {
                 Ok(v)
             }
 
+            #[instrument(err, skip_all)]
             fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::MapAccess<'de>,
@@ -47,6 +49,7 @@ pub(crate) mod string {
 
 pub(crate) mod u32 {
     use serde::Deserialize;
+    use tracing::instrument;
 
     pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<u32, D::Error>
     where
@@ -61,6 +64,7 @@ pub(crate) mod u32 {
                 formatter.write_str("a positive integer or a SurrealDB RecordId")
             }
 
+            #[instrument(err, skip(self))]
             fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
@@ -76,6 +80,7 @@ pub(crate) mod u32 {
                 }
             }
 
+            #[instrument(err, skip_all)]
             fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::MapAccess<'de>,
@@ -98,6 +103,7 @@ pub(crate) mod uuid {
 
     use serde::{Deserialize, de::VariantAccess};
     use surrealdb::Uuid;
+    use tracing::instrument;
 
     pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
     where
@@ -112,6 +118,7 @@ pub(crate) mod uuid {
                 formatter.write_str("a String in UUID format or a SurrealDB RecordId")
             }
 
+            #[instrument(err, skip_all)]
             fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::EnumAccess<'de>,
@@ -138,6 +145,7 @@ pub(crate) mod uuid {
                 Ok(sql_uuid.into())
             }
 
+            #[instrument(err, skip(self))]
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
@@ -147,6 +155,7 @@ pub(crate) mod uuid {
                 })
             }
 
+            #[instrument(err, skip_all)]
             fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::MapAccess<'de>,

@@ -206,11 +206,12 @@ dependencies = [
  "tower 0.5.2",
  "tower-http 0.5.2",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
 name = "archodex-com"
-version = "1.0.0+ab5bb4c53a6fa874dc7c2a3d57bb844a6415f229"
+version = "1.0.0+8e10a116c79511521145deea160c6f7f0d00a2d9"
 dependencies = [
  "aes-gcm",
  "archodex-error",

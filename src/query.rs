@@ -1,9 +1,10 @@
 use axum::{Extension, Json, extract::Path};
 use serde::{Deserialize, Serialize};
-use surrealdb::{Surreal, engine::any::Any};
+use tracing::instrument;
 
 use crate::{
     Result,
+    account::Account,
     db::{BeginReadonlyStatement, QueryCheckFirstRealError},
     event::Event,
     global_container::GlobalContainer,
@@ -26,9 +27,10 @@ pub(super) struct QueryResponse {
     events: Option<Vec<Event>>,
 }
 
+#[instrument(err, skip_all)]
 pub(super) async fn query(
     Path((_account_id, r#type)): Path<(String, QueryType)>,
-    Extension(db): Extension<Surreal<Any>>,
+    Extension(account): Extension<Account>,
 ) -> Result<Json<QueryResponse>> {
     const BEGIN: &str = "LET $resources: set<object> = []; LET $events: set<object> = [];";
 
@@ -45,6 +47,8 @@ pub(super) async fn query(
     };
     
     COMMIT;";
+
+    let db = account.resources_db().await?;
 
     let query = match r#type {
         QueryType::All => db

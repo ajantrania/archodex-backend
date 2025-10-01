@@ -38,6 +38,7 @@
           "build",
           "--bin=server",
           "--package=server",
+          "--no-default-features",
           "--features=archodex-com",
           "${config:archodex.ARCHODEX_COM_ADDITIONAL_BUILD_FLAG}"
         ],
@@ -50,7 +51,6 @@
       "cwd": "${workspaceFolder}",
       "env": {
         "COLORTERM": "truecolor",
-        "ENDPOINT": "http://localhost:5731",
         "RUST_BACKTRACE": "1"
       },
       // Additional environment variables must be defined here, see template file

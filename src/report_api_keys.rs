@@ -2,23 +2,16 @@ use std::collections::HashMap;
 
 use axum::{Extension, Json, extract::Path};
 use serde::{Deserialize, Serialize};
-use surrealdb::{
-    Surreal,
-    engine::any::Any,
-    sql::statements::{BeginStatement, CommitStatement},
-};
-use tracing::info;
+use surrealdb::sql::statements::{BeginStatement, CommitStatement};
+use tracing::{info, instrument};
 
-use archodex_error::{
-    anyhow::{Context as _, anyhow, bail},
-    bad_request, not_found,
-};
+use archodex_error::{anyhow::bail, bad_request, not_found};
 
 use crate::{
     Result,
-    account::{Account, AccountQueries},
-    auth::{AccountAuth, DashboardAuth},
-    db::{BeginReadonlyStatement, QueryCheckFirstRealError, accounts_db},
+    account::Account,
+    auth::DashboardAuth,
+    db::{BeginReadonlyStatement, QueryCheckFirstRealError},
     report_api_key::{ReportApiKey, ReportApiKeyPublic, ReportApiKeyQueries},
 };
 
@@ -27,10 +20,13 @@ pub(crate) struct ListReportApiKeysResponse {
     report_api_keys: Vec<ReportApiKeyPublic>,
 }
 
+#[instrument(err, skip_all)]
 pub(crate) async fn list_report_api_keys(
-    Extension(db): Extension<Surreal<Any>>,
+    Extension(account): Extension<Account>,
 ) -> Result<Json<ListReportApiKeysResponse>> {
-    let report_api_keys = db
+    let report_api_keys = account
+        .resources_db()
+        .await?
         .query(BeginReadonlyStatement)
         .list_report_api_keys_query()
         .query(CommitStatement::default())
@@ -44,7 +40,7 @@ pub(crate) async fn list_report_api_keys(
     Ok(Json(ListReportApiKeysResponse { report_api_keys }))
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct CreateReportApiKeyRequest {
     description: Option<String>,
 }
@@ -55,30 +51,23 @@ pub(crate) struct CreateReportApiKeyResponse {
     report_api_key_value: String,
 }
 
+#[instrument(err, skip(auth, account, params))]
 pub(crate) async fn create_report_api_key(
     Extension(auth): Extension<DashboardAuth>,
-    Extension(db): Extension<Surreal<Any>>,
+    Extension(account): Extension<Account>,
+    Path(params): Path<HashMap<String, String>>,
     Json(req): Json<CreateReportApiKeyRequest>,
 ) -> Result<Json<CreateReportApiKeyResponse>> {
-    let account_id = auth
-        .account_id()
-        .expect("account ID should exist in auth context");
-
-    let account = accounts_db()
-        .await?
-        .query(BeginReadonlyStatement)
-        .get_account_by_id(account_id.to_owned())
-        .query(CommitStatement::default())
-        .await?
-        .check_first_real_error()?
-        .take::<Option<Account>>(0)
-        .with_context(|| format!("Failed to get record for account ID {account_id:?}"))?
-        .ok_or_else(|| anyhow!("Account record not found for ID {account_id:?}"))?;
+    let Some(account_id) = params.get("account_id") else {
+        bail!("Missing account ID");
+    };
 
     let report_api_key = ReportApiKey::new(req.description, auth.principal().clone());
     let report_api_key_value = report_api_key
         .generate_value(account_id, account.salt().to_owned())
         .await?;
+
+    let db = account.resources_db().await?;
 
     let query = db
         .query(BeginStatement::default())
@@ -103,9 +92,10 @@ pub(crate) async fn create_report_api_key(
     }))
 }
 
+#[instrument(err, skip_all)]
 pub(crate) async fn revoke_report_api_key(
     Extension(auth): Extension<DashboardAuth>,
-    Extension(db): Extension<Surreal<Any>>,
+    Extension(account): Extension<Account>,
     Path(params): Path<HashMap<String, String>>,
 ) -> Result<Json<()>> {
     let Some(report_api_key_id_string) = params.get("report_api_key_id") else {
@@ -116,7 +106,9 @@ pub(crate) async fn revoke_report_api_key(
         bad_request!("Invalid route key ID");
     };
 
-    let report_api_key = db
+    let report_api_key = account
+        .resources_db()
+        .await?
         .query(BeginStatement::default())
         .revoke_report_api_key_query(report_api_key_id, auth.principal())
         .query(CommitStatement::default())

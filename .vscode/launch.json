@@ -38,6 +38,7 @@
           "build",
           "--bin=server",
           "--package=server",
+          "--no-default-features",
           "--features=archodex-com",
           "${config:archodex.ARCHODEX_COM_ADDITIONAL_BUILD_FLAG}"
         ],

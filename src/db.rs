@@ -13,7 +13,7 @@ use surrealdb::{
     opt::{Config, capabilities::Capabilities},
     sql::statements::CommitStatement,
 };
-use tokio::sync::{Mutex, OnceCell, RwLock};
+use tokio::sync::{OnceCell, RwLock};
 use tracing::{info, instrument, warn};
 
 use crate::{
@@ -77,21 +77,26 @@ pub(crate) async fn migrate_service_data_database(
     Ok(())
 }
 
+#[cfg(feature = "rocksdb")]
 #[derive(PartialEq)]
 enum ArchodexSurrealDatabase {
     Accounts,
     Resources,
 }
 
+#[cfg(feature = "rocksdb")]
 struct NonconcurrentDBState {
     connection: Surreal<Any>,
     current_database: ArchodexSurrealDatabase,
 }
 
+#[cfg(feature = "rocksdb")]
 #[instrument(err)]
 async fn get_nonconcurrent_db_connection(
     url: &str,
-) -> anyhow::Result<&'static Mutex<NonconcurrentDBState>> {
+) -> anyhow::Result<&'static tokio::sync::Mutex<NonconcurrentDBState>> {
+    use tokio::sync::Mutex;
+
     static NONCONCURRENT_DB: OnceCell<Mutex<NonconcurrentDBState>> = OnceCell::const_new();
 
     NONCONCURRENT_DB
@@ -146,6 +151,7 @@ async fn get_concurrent_db_connection(url: &str) -> anyhow::Result<Surreal<Any>>
 }
 
 pub(crate) enum DBConnection {
+    #[cfg(feature = "rocksdb")]
     Nonconcurrent(tokio::sync::MappedMutexGuard<'static, Surreal<Any>>),
     Concurrent(Surreal<Any>),
 }
@@ -155,6 +161,7 @@ impl std::ops::Deref for DBConnection {
 
     fn deref(&self) -> &Self::Target {
         match self {
+            #[cfg(feature = "rocksdb")]
             DBConnection::Nonconcurrent(db) => db,
             DBConnection::Concurrent(db) => db,
         }
@@ -168,7 +175,8 @@ pub(crate) async fn accounts_db() -> Result<DBConnection> {
     #[cfg(not(feature = "archodex-com"))]
     let surrealdb_url = Env::surrealdb_url();
 
-    if !cfg!(feature = "archodex-com") && surrealdb_url.starts_with("rocksdb:") {
+    #[cfg(feature = "rocksdb")]
+    if surrealdb_url.starts_with("rocksdb:") {
         let connection = get_nonconcurrent_db_connection(surrealdb_url).await?;
         let mut db_state = connection.lock().await;
 
@@ -177,15 +185,15 @@ pub(crate) async fn accounts_db() -> Result<DBConnection> {
             db_state.current_database = ArchodexSurrealDatabase::Accounts;
         }
 
-        Ok(DBConnection::Nonconcurrent(
+        return Ok(DBConnection::Nonconcurrent(
             tokio::sync::MutexGuard::try_map(db_state, |state| Some(&mut state.connection))
                 .unwrap_or_else(|_| unreachable!()),
-        ))
-    } else {
-        Ok(DBConnection::Concurrent(
-            get_concurrent_db_connection(surrealdb_url).await?,
-        ))
+        ));
     }
+
+    Ok(DBConnection::Concurrent(
+        get_concurrent_db_connection(surrealdb_url).await?,
+    ))
 }
 
 #[instrument(err)]
@@ -196,7 +204,8 @@ pub(crate) async fn resources_db(
     static DBS_BY_URL: LazyLock<RwLock<HashMap<String, Surreal<Any>>>> =
         LazyLock::new(|| RwLock::new(HashMap::new()));
 
-    if !cfg!(feature = "archodex-com") && service_data_surrealdb_url.starts_with("rocksdb:") {
+    #[cfg(feature = "rocksdb")]
+    if service_data_surrealdb_url.starts_with("rocksdb:") {
         let connection = get_nonconcurrent_db_connection(service_data_surrealdb_url).await?;
         let mut db_state = connection.lock().await;
 
@@ -205,53 +214,53 @@ pub(crate) async fn resources_db(
             db_state.current_database = ArchodexSurrealDatabase::Resources;
         }
 
-        Ok(DBConnection::Nonconcurrent(
+        return Ok(DBConnection::Nonconcurrent(
             tokio::sync::MutexGuard::try_map(db_state, |state| Some(&mut state.connection))
                 .unwrap_or_else(|_| unreachable!()),
-        ))
-    } else {
-        let dbs_by_url = DBS_BY_URL.read().await;
+        ));
+    }
 
-        let db = if let Some(db) = dbs_by_url.get(service_data_surrealdb_url) {
+    let dbs_by_url = DBS_BY_URL.read().await;
+
+    let db = if let Some(db) = dbs_by_url.get(service_data_surrealdb_url) {
+        db.clone()
+    } else {
+        drop(dbs_by_url);
+
+        let mut dbs_by_url = DBS_BY_URL.write().await;
+
+        if let Some(db) = dbs_by_url.get(service_data_surrealdb_url) {
             db.clone()
         } else {
-            drop(dbs_by_url);
+            let db = surrealdb::engine::any::connect((
+                service_data_surrealdb_url,
+                Config::default()
+                    .capabilities(Capabilities::default().with_live_query_notifications(false))
+                    .strict(),
+            ))
+            .await?;
 
-            let mut dbs_by_url = DBS_BY_URL.write().await;
+            dbs_by_url.insert(service_data_surrealdb_url.to_string(), db.clone());
 
-            if let Some(db) = dbs_by_url.get(service_data_surrealdb_url) {
-                db.clone()
-            } else {
-                let db = surrealdb::engine::any::connect((
-                    service_data_surrealdb_url,
-                    Config::default()
-                        .capabilities(Capabilities::default().with_live_query_notifications(false))
-                        .strict(),
-                ))
-                .await?;
-
-                dbs_by_url.insert(service_data_surrealdb_url.to_string(), db.clone());
-
-                db
-            }
-        };
-
-        if let Some(creds) = Env::surrealdb_creds() {
-            db.signin(creds)
-                .await
-                .with_context(|| format!("Failed to sign in to SurrealDB instance {service_data_surrealdb_url} with SURREALDB_USERNAME and SURREALDB_PASSWORD environment values"))?;
+            db
         }
+    };
 
-        let namespace = if cfg!(feature = "archodex-com") {
-            format!("a{account_id}")
-        } else {
-            "archodex".to_string()
-        };
-
-        db.use_ns(namespace).use_db("resources").await?;
-
-        Ok(DBConnection::Concurrent(db))
+    if let Some(creds) = Env::surrealdb_creds() {
+        db.signin(creds)
+            .await
+            .with_context(|| format!("Failed to sign in to SurrealDB instance {service_data_surrealdb_url} with SURREALDB_USERNAME and SURREALDB_PASSWORD environment values"))?;
     }
+
+    let namespace = if cfg!(feature = "archodex-com") {
+        format!("a{account_id}")
+    } else {
+        "archodex".to_string()
+    };
+
+    db.use_ns(namespace).use_db("resources").await?;
+
+    Ok(DBConnection::Concurrent(db))
 }
 
 #[instrument(err, skip_all)]

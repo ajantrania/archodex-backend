@@ -90,11 +90,6 @@ pub(crate) async fn create_local_account(
 async fn verify_no_local_accounts_exist() -> Result<()> {
     use archodex_error::{anyhow::anyhow, conflict};
 
-    #[derive(Deserialize, PartialEq)]
-    struct AccountsCount {
-        count: u64,
-    }
-
     let local_account_exists: bool = accounts_db()
         .await?
         .query("RETURN COUNT(SELECT id FROM account WHERE deleted_at IS NONE LIMIT 1) > 0")

@@ -21,6 +21,12 @@ pub(crate) struct Account {
     service_data_surrealdb_url: Option<String>,
     #[serde(deserialize_with = "surrealdb_deserializers::bytes::deserialize")]
     salt: Vec<u8>,
+    #[cfg(not(feature = "archodex-com"))]
+    #[serde(
+        default,
+        deserialize_with = "surrealdb_deserializers::bytes::deserialize_optional"
+    )]
+    api_private_key: Option<Vec<u8>>,
     created_at: Option<DateTime<Utc>>,
     created_by: Option<User>,
     deleted_at: Option<DateTime<Utc>>,
@@ -72,13 +78,28 @@ impl Account {
     #[cfg(not(feature = "archodex-com"))]
     #[instrument(err)]
     pub(crate) async fn new(id: String, principal: User) -> anyhow::Result<Self> {
+        use tracing::info;
+
         let service_data_surrealdb_url = Env::surrealdb_url();
 
         migrate_service_data_database(service_data_surrealdb_url, &id).await?;
 
+        let api_private_key = if std::env::var("ARCHODEX_API_PRIVATE_KEY").is_ok() {
+            info!(
+                "API Private Key value found in ARCHODEX_API_PRIVATE_KEY environment variable, will not generate and store a key in the database"
+            );
+            None
+        } else {
+            info!(
+                "API Private Key value was not found in ARCHODEX_API_PRIVATE_KEY environment variable, generating a new key and storing it in the database"
+            );
+            Some(rand::thread_rng().r#gen::<[u8; 16]>().to_vec())
+        };
+
         Ok(Self {
             id,
             salt: rand::thread_rng().r#gen::<[u8; 16]>().to_vec(),
+            api_private_key,
             created_at: None,
             created_by: Some(principal),
             deleted_at: None,
@@ -146,23 +167,32 @@ impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::
         let endpoint_binding = next_binding();
         let service_data_surrealdb_url_binding = next_binding();
         let salt_binding = next_binding();
+        let api_private_key_binding = next_binding();
         let created_by_binding = next_binding();
 
         #[cfg(not(feature = "archodex-com"))]
-        let (endpoint_value, service_data_surrealdb_url_value) =
-            (Option::<String>::None, Option::<String>::None);
+        let (endpoint_value, service_data_surrealdb_url_value, api_private_key_value) = (
+            Option::<String>::None,
+            Option::<String>::None,
+            account
+                .api_private_key
+                .clone()
+                .map(surrealdb::sql::Bytes::from),
+        );
         #[cfg(feature = "archodex-com")]
-        let (endpoint_value, service_data_surrealdb_url_value) = (
+        let (endpoint_value, service_data_surrealdb_url_value, api_private_key_value) = (
             account.endpoint.clone(),
             account.service_data_surrealdb_url.clone(),
+            Option::<surrealdb::sql::Bytes>::None,
         );
 
         self
-            .query(format!("CREATE ${account_binding} CONTENT {{ endpoint: ${endpoint_binding}, service_data_surrealdb_url: ${service_data_surrealdb_url_binding}, salt: ${salt_binding}, created_by: ${created_by_binding} }} RETURN NONE"))
+            .query(format!("CREATE ${account_binding} CONTENT {{ endpoint: ${endpoint_binding}, service_data_surrealdb_url: ${service_data_surrealdb_url_binding}, salt: ${salt_binding}, api_private_key: ${api_private_key_binding}, created_by: ${created_by_binding} }} RETURN NONE"))
             .bind((account_binding, surrealdb::sql::Thing::from(account)))
             .bind((endpoint_binding, endpoint_value))
             .bind((service_data_surrealdb_url_binding, service_data_surrealdb_url_value))
             .bind((salt_binding, surrealdb::sql::Bytes::from(account.salt.clone())))
+            .bind((api_private_key_binding, api_private_key_value))
             .bind((created_by_binding, surrealdb::sql::Thing::from(principal)))
     }
 

@@ -51,7 +51,7 @@ pub(crate) struct CreateReportApiKeyResponse {
     report_api_key_value: String,
 }
 
-#[instrument(err, skip(auth, account, params))]
+#[instrument(err, skip(auth, account))]
 pub(crate) async fn create_report_api_key(
     Extension(auth): Extension<DashboardAuth>,
     Extension(account): Extension<Account>,
@@ -74,17 +74,16 @@ pub(crate) async fn create_report_api_key(
         .create_report_api_key_query(&report_api_key)
         .query(CommitStatement::default());
 
-    info!(
-        query = tracing::field::debug(&query),
-        "Creating report key {report_api_key_id}",
-        report_api_key_id = report_api_key.id()
-    );
-
     let report_api_key = query
         .await?
         .check_first_real_error()?
         .take::<Option<ReportApiKey>>(0)?
         .expect("Create report API key query should return a report key instance");
+
+    info!(
+        report_api_key_id = report_api_key.id(),
+        "Created Report API Key"
+    );
 
     Ok(Json(CreateReportApiKeyResponse {
         report_api_key: ReportApiKeyPublic::from(report_api_key),
@@ -92,7 +91,7 @@ pub(crate) async fn create_report_api_key(
     }))
 }
 
-#[instrument(err, skip_all)]
+#[instrument(err, skip(auth, account))]
 pub(crate) async fn revoke_report_api_key(
     Extension(auth): Extension<DashboardAuth>,
     Extension(account): Extension<Account>,

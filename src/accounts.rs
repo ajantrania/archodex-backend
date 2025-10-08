@@ -143,7 +143,7 @@ pub(crate) async fn create_archodex_com_account(
     Ok(Json(account.into()))
 }
 
-#[instrument(err)]
+#[instrument(err, skip_all)]
 pub(crate) async fn delete_account(
     Extension(auth): Extension<DashboardAuth>,
     Extension(account): Extension<Account>,
@@ -161,6 +161,9 @@ pub(crate) async fn delete_account(
             .context("Failed to submit query to delete data in resources database")?
             .check_first_real_error()
             .context("Failed to delete data in resources database")?;
+
+        // This will force the regeneration of the API private key if a new account is created
+        crate::env::Env::clear_api_private_key().await;
     }
 
     #[cfg(feature = "archodex-com")]

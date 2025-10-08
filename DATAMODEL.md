@@ -53,6 +53,7 @@ Account IDs are globally unique, even among self-hosted instances. When an accou
 | `endpoint` | string | Must be a valid URL | ✅ | ✅ | ✅ | API URL for this account. |
 | `service_data_surrealdb_url` | string | | ✅ | ❌ | ❌ | Connection string for the tenant's *resources* SurrealDB database store. |
 | `salt` | bytes | 16-byte length | ✅ | ❌ | ✅ | Salt used by agents to cryptographically hash Secret Values before transmitting to the account backend. |
+| `api_private_key` | bytes (optional) | 16-byte length | ❌ | ❌ | ✅ | Generated private key material for API keys in self-hosted instances when the account is created without a private key specified via the `ARCHODEX_API_PRIVATE_KEY` environment variable. |
 | `created_at` | datetime | | ✅ | ✅ | ✅ | Account creation timestamp. |
 | `created_by` | `user` record | | ✅ | ✅ | ✅ | User who created the account. |
 | `deleted_at` | datetime (optional) | | ✅ | ✅ | ✅ | Account deletion timestamp. Used to check if the account is active. |

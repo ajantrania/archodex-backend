@@ -15,6 +15,12 @@
     },
     {
       "type": "shell",
+      "command": "surreal sql --endpoint rocksdb://db --namespace archodex --pretty --multi",
+      "problemMatcher": [],
+      "label": "surreal: SQL CLI to self-hosted database at ./db"
+    },
+    {
+      "type": "shell",
       "command": "act --platform ubuntu-latest=catthehacker/ubuntu:act-24.04 --platform linux/amd64 --artifact-server-path /tmp/act-artifacts --workflows .github/workflows/build-dev.yml --use-new-action-cache --reuse",
       "problemMatcher": [],
       "group": {

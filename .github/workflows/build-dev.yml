@@ -12,8 +12,8 @@ concurrency:
 
 env:
   ACT: false
-  AWS_PAGER: ""
-  OCI_REPO: ""
+  AWS_PAGER: ''
+  OCI_REPO: ''
 
 jobs:
   build:

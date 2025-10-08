@@ -1,0 +1,5 @@
+.aws-sam
+archodex-com
+!archodex-com/Cargo.toml
+db
+target

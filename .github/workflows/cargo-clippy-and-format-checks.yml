@@ -39,9 +39,17 @@ jobs:
           components: clippy,rustfmt
 
       - name: Cargo Clippy Check
-        run: cargo clippy --workspace --keep-going --all-targets --exclude archodex-com --no-default-features -- --deny clippy::pedantic
+        run:
+          cargo clippy --workspace --keep-going --all-targets --exclude archodex-com --no-default-features -- --deny
+          clippy::pedantic
 
       - name: Cargo Format Check
-        # cargo fmt doesn't have an --exclude or similar argument to exclude the archodex-com package, so we have to 
+        # cargo fmt doesn't have an --exclude or similar argument to exclude the archodex-com package, so we have to
         # list all other packages to check instead of using --all
-        run: cargo fmt --check --package archodex-backend --package archodex-error --package lambda --package migrator --package server
+        run:
+          cargo fmt --check --package archodex-backend --package archodex-error --package lambda --package migrator
+          --package server
+
+      - uses: actions/setup-node@v4
+
+      - run: npx prettier --check .

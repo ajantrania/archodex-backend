@@ -8,8 +8,13 @@ edition.workspace = true
 [dependencies]
 archodex-backend = { path = "..", default-features = false }
 async-channel = "2.5.0"
-futures-lite = { version = "2.6.1", default-features = false, features = ["std"] }
-lambda_http = { version = "0.11.4", default-features = false, features = ["apigw_rest", "tracing"] }
+futures-lite = { version = "2.6.1", default-features = false, features = [
+  "std",
+] }
+lambda_http = { version = "0.11.4", default-features = false, features = [
+  "apigw_rest",
+  "tracing",
+] }
 tokio.workspace = true
 tracing-subscriber.workspace = true
 

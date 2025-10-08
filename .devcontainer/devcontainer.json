@@ -36,6 +36,7 @@
         "ms-vscode.cpptools",
         "pbkit.vscode-pbkit",
         "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
         "vadimcn.vscode-lldb",
         "xaver.clang-format"
       ]

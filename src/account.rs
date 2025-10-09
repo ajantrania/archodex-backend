@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use surrealdb::sql::statements::{BeginStatement, CommitStatement};
 use tracing::instrument;
 
 use crate::{
@@ -140,26 +141,21 @@ impl Account {
 
 pub(crate) trait AccountQueries<'r, C: surrealdb::Connection> {
     fn create_account_query(
-        self,
+        &'r self,
         account: &Account,
         principal: &User,
     ) -> surrealdb::method::Query<'r, C>;
-    fn add_account_access_for_user(
-        self,
-        account: &Account,
-        user: &User,
-    ) -> surrealdb::method::Query<'r, C>;
-    fn get_account_by_id(self, account_id: String) -> surrealdb::method::Query<'r, C>;
+    fn get_account_by_id(&'r self, account_id: String) -> surrealdb::method::Query<'r, C>;
     fn delete_account_query(
-        self,
+        &'r self,
         account: &Account,
         principal: &User,
     ) -> surrealdb::method::Query<'r, C>;
 }
 
-impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::Query<'r, C> {
+impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::Surreal<C> {
     fn create_account_query(
-        self,
+        &'r self,
         account: &Account,
         principal: &User,
     ) -> surrealdb::method::Query<'r, C> {
@@ -186,32 +182,29 @@ impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::
             Option::<surrealdb::sql::Bytes>::None,
         );
 
-        self
+        let query = self
+            .query(BeginStatement::default())
             .query(format!("CREATE ${account_binding} CONTENT {{ endpoint: ${endpoint_binding}, service_data_surrealdb_url: ${service_data_surrealdb_url_binding}, salt: ${salt_binding}, api_private_key: ${api_private_key_binding}, created_by: ${created_by_binding} }} RETURN NONE"))
             .bind((account_binding, surrealdb::sql::Thing::from(account)))
             .bind((endpoint_binding, endpoint_value))
             .bind((service_data_surrealdb_url_binding, service_data_surrealdb_url_value))
             .bind((salt_binding, surrealdb::sql::Bytes::from(account.salt.clone())))
             .bind((api_private_key_binding, api_private_key_value))
-            .bind((created_by_binding, surrealdb::sql::Thing::from(principal)))
-    }
+            .bind((created_by_binding, surrealdb::sql::Thing::from(principal)));
 
-    fn add_account_access_for_user(
-        self,
-        account: &Account,
-        user: &User,
-    ) -> surrealdb::method::Query<'r, C> {
         let user_binding = next_binding();
         let account_binding = next_binding();
 
-        self.query(format!(
-            "RELATE ${user_binding}->has_access->${account_binding} RETURN NONE"
-        ))
-        .bind((user_binding, surrealdb::sql::Thing::from(user)))
-        .bind((account_binding, surrealdb::sql::Thing::from(account)))
+        query
+            .query(format!(
+                "RELATE ${user_binding}->has_access->${account_binding} RETURN NONE"
+            ))
+            .bind((user_binding, surrealdb::sql::Thing::from(principal)))
+            .bind((account_binding, surrealdb::sql::Thing::from(account)))
+            .query(CommitStatement::default())
     }
 
-    fn get_account_by_id(self, account_id: String) -> surrealdb::method::Query<'r, C> {
+    fn get_account_by_id(&'r self, account_id: String) -> surrealdb::method::Query<'r, C> {
         let account_binding = next_binding();
 
         self.query(format!("SELECT * FROM ONLY ${account_binding}"))
@@ -222,7 +215,7 @@ impl<'r, C: surrealdb::Connection> AccountQueries<'r, C> for surrealdb::method::
     }
 
     fn delete_account_query(
-        self,
+        &'r self,
         account: &Account,
         principal: &User,
     ) -> surrealdb::method::Query<'r, C> {

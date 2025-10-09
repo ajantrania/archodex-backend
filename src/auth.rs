@@ -8,13 +8,13 @@ use josekit::{
     jwt,
 };
 use reqwest::header::AUTHORIZATION;
-use surrealdb::{Surreal, Uuid, engine::any::Any, sql::statements::CommitStatement};
+use surrealdb::{Surreal, Uuid, engine::any::Any};
 use tokio::sync::OnceCell;
 use tracing::{Instrument as _, error_span, info, instrument, warn};
 
 use crate::{
     Result,
-    db::{BeginReadonlyStatement, QueryCheckFirstRealError, accounts_db},
+    db::{QueryCheckFirstRealError, accounts_db},
     env::Env,
     report_api_key::{ReportApiKey, ReportApiKeyIsValidQueryResponse, ReportApiKeyQueries},
     user::User,
@@ -170,11 +170,9 @@ impl DashboardAuth {
     pub(crate) async fn validate_account_access(&self, account_id: &str) -> Result<()> {
         if accounts_db()
             .await?
-            .query(BeginReadonlyStatement)
             .query("SELECT 1 FROM $user->has_access->(account WHERE record::id(id) == $account_id)")
             .bind(("user", surrealdb::sql::Thing::from(&self.principal)))
             .bind(("account_id", account_id.to_string()))
-            .query(CommitStatement::default())
             .await?
             .check_first_real_error()?
             .take::<Option<u8>>((0, "1"))?
@@ -258,9 +256,7 @@ impl ReportApiKeyAuth {
 
     pub(crate) async fn validate_account_access(&self, db: &Surreal<Any>) -> Result<()> {
         let Some(response) = db
-            .query(BeginReadonlyStatement)
             .report_api_key_is_valid_query(self.key_id)
-            .query(CommitStatement::default())
             .await?
             .check_first_real_error()?
             .take::<Option<ReportApiKeyIsValidQueryResponse>>(0)?

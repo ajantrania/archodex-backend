@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use axum::{Extension, Json, extract::Path};
 use serde::{Deserialize, Serialize};
-use surrealdb::sql::statements::{BeginStatement, CommitStatement};
 use tracing::{info, instrument};
 
 use archodex_error::{anyhow::bail, bad_request, not_found};
@@ -11,7 +10,7 @@ use crate::{
     Result,
     account::Account,
     auth::DashboardAuth,
-    db::{BeginReadonlyStatement, QueryCheckFirstRealError},
+    db::QueryCheckFirstRealError,
     report_api_key::{ReportApiKey, ReportApiKeyPublic, ReportApiKeyQueries},
 };
 
@@ -27,9 +26,7 @@ pub(crate) async fn list_report_api_keys(
     let report_api_keys = account
         .resources_db()
         .await?
-        .query(BeginReadonlyStatement)
         .list_report_api_keys_query()
-        .query(CommitStatement::default())
         .await?
         .check_first_real_error()?
         .take::<Vec<ReportApiKey>>(0)?
@@ -69,10 +66,7 @@ pub(crate) async fn create_report_api_key(
 
     let db = account.resources_db().await?;
 
-    let query = db
-        .query(BeginStatement::default())
-        .create_report_api_key_query(&report_api_key)
-        .query(CommitStatement::default());
+    let query = db.create_report_api_key_query(&report_api_key);
 
     let report_api_key = query
         .await?
@@ -108,9 +102,7 @@ pub(crate) async fn revoke_report_api_key(
     let report_api_key = account
         .resources_db()
         .await?
-        .query(BeginStatement::default())
         .revoke_report_api_key_query(report_api_key_id, auth.principal())
-        .query(CommitStatement::default())
         .await?
         .check_first_real_error()?
         .take::<Option<ReportApiKey>>(0)?;

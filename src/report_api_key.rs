@@ -210,17 +210,17 @@ impl ReportApiKey {
 }
 
 pub(crate) trait ReportApiKeyQueries<'r, C: surrealdb::Connection> {
-    fn list_report_api_keys_query(self) -> surrealdb::method::Query<'r, C>;
+    fn list_report_api_keys_query(&'r self) -> surrealdb::method::Query<'r, C>;
     fn create_report_api_key_query(
-        self,
+        &'r self,
         report_api_key: &ReportApiKey,
     ) -> surrealdb::method::Query<'r, C>;
     fn revoke_report_api_key_query(
-        self,
+        &'r self,
         report_api_key_id: u32,
         revoked_by: &User,
     ) -> surrealdb::method::Query<'r, C>;
-    fn report_api_key_is_valid_query(self, id: u32) -> surrealdb::method::Query<'r, C>;
+    fn report_api_key_is_valid_query(&'r self, id: u32) -> surrealdb::method::Query<'r, C>;
     type ReportApiKeyIsValidQueryResponse;
 }
 
@@ -235,13 +235,13 @@ impl ReportApiKeyIsValidQueryResponse {
     }
 }
 
-impl<'r, C: surrealdb::Connection> ReportApiKeyQueries<'r, C> for surrealdb::method::Query<'r, C> {
-    fn list_report_api_keys_query(self) -> surrealdb::method::Query<'r, C> {
+impl<'r, C: surrealdb::Connection> ReportApiKeyQueries<'r, C> for surrealdb::Surreal<C> {
+    fn list_report_api_keys_query(&'r self) -> surrealdb::method::Query<'r, C> {
         self.query("SELECT * FROM report_api_key WHERE type::is::none(revoked_at)")
     }
 
     fn create_report_api_key_query(
-        self,
+        &'r self,
         report_api_key: &ReportApiKey,
     ) -> surrealdb::method::Query<'r, C> {
         let report_api_key_binding = next_binding();
@@ -256,7 +256,7 @@ impl<'r, C: surrealdb::Connection> ReportApiKeyQueries<'r, C> for surrealdb::met
     }
 
     fn revoke_report_api_key_query(
-        self,
+        &'r self,
         report_api_key_id: u32,
         revoked_by: &User,
     ) -> surrealdb::method::Query<'r, C> {
@@ -277,7 +277,7 @@ impl<'r, C: surrealdb::Connection> ReportApiKeyQueries<'r, C> for surrealdb::met
     }
 
     fn report_api_key_is_valid_query(
-        self,
+        &'r self,
         report_api_key_id: u32,
     ) -> surrealdb::method::Query<'r, C> {
         let report_api_key_binding = next_binding();

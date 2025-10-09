@@ -1,6 +1,5 @@
 use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
-use surrealdb::sql::statements::{BeginStatement, CommitStatement};
 use tracing::instrument;
 
 use archodex_error::anyhow::Context as _;
@@ -73,10 +72,7 @@ pub(crate) async fn create_local_account(
 
     accounts_db()
         .await?
-        .query(BeginStatement::default())
         .create_account_query(&account, principal)
-        .add_account_access_for_user(&account, principal)
-        .query(CommitStatement::default())
         .await
         .context("Failed to submit query to create new account record in accounts database")?
         .check_first_real_error()
@@ -131,10 +127,7 @@ pub(crate) async fn create_archodex_com_account(
         .context("Failed to create new account")?;
 
     accounts_db
-        .query(BeginStatement::default())
         .create_account_query(&account, principal)
-        .add_account_access_for_user(&account, principal)
-        .query(CommitStatement::default())
         .await
         .context("Failed to commit account creation transaction")?
         .check_first_real_error()
@@ -154,9 +147,7 @@ pub(crate) async fn delete_account(
 
     #[cfg(not(feature = "archodex-com"))]
     {
-        db.query(BeginStatement::default())
-            .query("REMOVE DATABASE resources")
-            .query(CommitStatement::default())
+        db.query("REMOVE DATABASE resources")
             .await
             .context("Failed to submit query to delete data in resources database")?
             .check_first_real_error()
@@ -172,9 +163,7 @@ pub(crate) async fn delete_account(
             .await?;
     }
 
-    db.query(BeginStatement::default())
-        .delete_account_query(&account, auth.principal())
-        .query(CommitStatement::default())
+    db.delete_account_query(&account, auth.principal())
         .await
         .context("Failed to submit query to delete account record in accounts database")?
         .check_first_real_error()

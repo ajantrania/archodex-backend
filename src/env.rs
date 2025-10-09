@@ -159,7 +159,6 @@ impl Env {
         #[cfg(not(feature = "archodex-com"))]
         {
             use serde::Deserialize;
-            use surrealdb::sql::statements::{BeginStatement, CommitStatement};
 
             use crate::{
                 db::{QueryCheckFirstRealError as _, accounts_db},
@@ -187,9 +186,7 @@ impl Env {
             let api_private_key_from_db = accounts_db()
                 .await
                 .expect("should be able to connect to accounts database")
-                .query(BeginStatement::default())
                 .query("SELECT api_private_key FROM account WHERE deleted_at IS NONE LIMIT 1")
-                .query(CommitStatement::default())
                 .await
                 .expect("should be able to query accounts database")
                 .check_first_real_error()

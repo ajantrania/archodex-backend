@@ -4,14 +4,18 @@
     {
       "type": "cargo",
       "command": "build",
-      "problemMatcher": [
-        "$rustc"
-      ],
+      "problemMatcher": ["$rustc"],
       "group": {
         "kind": "build",
         "isDefault": true
       },
       "label": "rust: cargo build"
+    },
+    {
+      "type": "shell",
+      "command": "surreal sql --endpoint rocksdb://db --namespace archodex --pretty --multi",
+      "problemMatcher": [],
+      "label": "surreal: SQL CLI to self-hosted database at ./db"
     },
     {
       "type": "shell",

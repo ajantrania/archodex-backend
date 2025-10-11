@@ -9,6 +9,10 @@ DEFINE FIELD OVERWRITE endpoint ON TABLE account TYPE option<string> READONLY
 DEFINE FIELD OVERWRITE service_data_surrealdb_url ON TABLE account TYPE option<string> READONLY;
 DEFINE FIELD IF NOT EXISTS salt ON TABLE account TYPE bytes READONLY
   ASSERT bytes::len($this.salt) == 16;
+// This is used to store a generated private key for API key generation and validation in self-hosted instances when the
+// account is created without a private key specified via the `ARCHODEX_API_PRIVATE_KEY` environment variable.
+DEFINE FIELD IF NOT EXISTS api_private_key ON TABLE account TYPE option<bytes> READONLY
+  ASSERT bytes::len($this.api_private_key) == 16;
 DEFINE FIELD IF NOT EXISTS created_at ON TABLE account TYPE datetime READONLY DEFAULT time::now();
 DEFINE FIELD IF NOT EXISTS created_by ON TABLE account TYPE record<user> READONLY;
 DEFINE FIELD IF NOT EXISTS deleted_at ON TABLE account TYPE option<datetime>;

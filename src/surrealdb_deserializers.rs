@@ -178,34 +178,67 @@ pub(crate) mod uuid {
 }
 
 pub(crate) mod bytes {
+    struct Visitor;
+    type Value = Vec<u8>;
+
+    impl serde::de::Visitor<'_> for Visitor {
+        type Value = Value;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a byte array")
+        }
+
+        fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v.to_vec())
+        }
+
+        fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v)
+        }
+    }
+
     pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        struct Visitor;
+        deserializer.deserialize_any(Visitor)
+    }
 
-        impl serde::de::Visitor<'_> for Visitor {
-            type Value = Vec<u8>;
+    #[cfg(not(feature = "archodex-com"))]
+    pub(crate) fn deserialize_optional<'de, D>(deserializer: D) -> Result<Option<Value>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct OptionalVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for OptionalVisitor {
+            type Value = Option<Value>;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a byte array")
+                formatter.write_str("an optional byte array")
             }
 
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+            fn visit_none<E>(self) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                Ok(v.to_vec())
+                Ok(None)
             }
 
-            fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+            fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
             where
-                E: serde::de::Error,
+                D: serde::Deserializer<'de>,
             {
-                Ok(v)
+                Ok(Some(deserializer.deserialize_any(Visitor)?))
             }
         }
 
-        deserializer.deserialize_any(Visitor)
+        deserializer.deserialize_option(OptionalVisitor)
     }
 }

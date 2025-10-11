@@ -9,11 +9,7 @@
       "request": "launch",
       "name": "Debug self-hosted backend server",
       "cargo": {
-        "args": [
-          "build",
-          "--bin=server",
-          "--package=server"
-        ],
+        "args": ["build", "--bin=server", "--package=server"],
         "filter": {
           "name": "server",
           "kind": "bin"
@@ -26,7 +22,7 @@
         "RUST_BACKTRACE": "1"
       },
       // Additional environment variables may be defined here, see template file
-      "envFile": "${workspaceFolder}/.vscode/.env.self-hosted",
+      "envFile": "${workspaceFolder}/.vscode/.env.self-hosted"
     },
     {
       "type": "lldb",
@@ -53,7 +49,7 @@
         "RUST_BACKTRACE": "1"
       },
       // Additional environment variables must be defined here, see template file
-      "envFile": "${workspaceFolder}/.vscode/.env.archodex-com",
+      "envFile": "${workspaceFolder}/.vscode/.env.archodex-com"
     }
   ]
 }

@@ -2,10 +2,13 @@
   "editor.formatOnSave": true,
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.check.workspace": false,
-  "rust-analyzer.check.extraArgs": [
-    "--",
-    "--warn",
-    "clippy::pedantic",
-  ],
+  "rust-analyzer.check.extraArgs": ["--", "--warn", "clippy::pedantic"],
   "rust-analyzer.cargo.noDefaultFeatures": true,
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "prettier.enable": true
 }

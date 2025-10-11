@@ -11,7 +11,6 @@ use surrealdb::{
     Surreal,
     engine::any::Any,
     opt::{Config, capabilities::Capabilities},
-    sql::statements::CommitStatement,
 };
 use tokio::sync::{OnceCell, RwLock};
 use tracing::{info, instrument, warn};
@@ -278,9 +277,7 @@ pub(crate) async fn dashboard_auth_account(
 
     let account = accounts_db()
         .await?
-        .query(BeginReadonlyStatement)
         .get_account_by_id(account_id.to_owned())
-        .query(CommitStatement::default())
         .await?
         .check_first_real_error()?
         .take::<Option<Account>>(0)
@@ -303,9 +300,7 @@ pub(crate) async fn report_api_key_account(
 ) -> Result<Response> {
     let account = accounts_db()
         .await?
-        .query(BeginReadonlyStatement)
         .get_account_by_id(auth.account_id().to_owned())
-        .query(CommitStatement::default())
         .await?
         .check_first_real_error()?
         .take::<Option<Account>>(0)

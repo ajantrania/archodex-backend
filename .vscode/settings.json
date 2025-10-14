@@ -4,6 +4,9 @@
   "rust-analyzer.check.workspace": false,
   "rust-analyzer.check.extraArgs": ["--", "--warn", "clippy::pedantic"],
   "rust-analyzer.cargo.noDefaultFeatures": true,
+  "[github-actions-workflow]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
   "[json]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },

@@ -100,3 +100,11 @@ jobs:
             }}
           labels: ${{ env.ACT != 'true' && steps.meta.outputs.labels }}
           push: ${{ env.ACT != 'true' }}
+
+      - name: Upload attestation
+        if: env.ACT != 'true'
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.OCI_REPO }}
+          subject-digest: ${{ steps.build-images.outputs.digest }}
+          push-to-registry: true

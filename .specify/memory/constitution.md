@@ -13,9 +13,11 @@ All functionality MUST be exposed through well-defined HTTP APIs. API contracts 
 **Rationale**: Archodex serves both dashboard UI and agent clients. Clear API boundaries enable independent evolution of frontend, backend, and agent components.
 
 ### III. Observability & Debugging
-All new and updated functions MUST use the `#[instrument]` tracing attribute for structured logging. Confidential and PII information MUST only be logged at `trace` level. Database operations, authentication flows, and tenant provisioning MUST be traceable.
+All new and updated production functions MUST use the `#[instrument]` tracing attribute for structured logging. Confidential and PII information MUST only be logged at `trace` level. Database operations, authentication flows, and tenant provisioning MUST be traceable.
 
-**Rationale**: Deep visibility into system behavior is essential for debugging multi-tenant operations. Logs are internal-only (Archodex employees for managed service, self-hosted operators for their deployments).
+**Test code exception**: Test helper functions and test fixtures MAY omit `#[instrument]` to avoid over-engineering test infrastructure. Complex test setup functions that would benefit from debugging visibility SHOULD use `#[instrument]`, but simple factory functions and fixtures need not.
+
+**Rationale**: Deep visibility into system behavior is essential for debugging multi-tenant operations. Logs are internal-only (Archodex employees for managed service, self-hosted operators for their deployments). Test code prioritizes simplicity and clarity over exhaustive instrumentation.
 
 ### IV. Self-Hosted Parity
 Features developed for the managed archodex.com service MUST work in self-hosted deployments unless explicitly scoped as managed-only (e.g., AWS account provisioning). Configuration MUST use feature flags and environment variables to differentiate deployment modes. Documentation MUST clearly indicate managed-only versus universal features.

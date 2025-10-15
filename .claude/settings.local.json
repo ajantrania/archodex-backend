@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr view:*)",
+      "WebSearch",
+      "WebFetch(domain:surrealdb.com)",
+      "WebFetch(domain:research.google.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.rs)"
+    ],
+    "deny": []
+  }
+}

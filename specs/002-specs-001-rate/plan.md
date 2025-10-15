@@ -7,7 +7,9 @@
 
 ## Summary
 
-This feature establishes a testing framework for the Archodex backend to enable automated testing of existing features and prepare for testing the rate limiting feature (001-rate-limits-we). The primary requirement is to evaluate testing approaches (unit tests with mocks vs integration tests vs hybrid), research SurrealDB testing viability, select the most pragmatic approach for the project's current stage, and validate it with 2 example tests. The framework must balance maintainability, setup complexity, and confidence level while aligning with the Constitution's principle of avoiding over-engineering.
+This feature establishes a testing framework for the Archodex backend to enable automated testing of existing features and prepare for testing the rate limiting feature (001-rate-limits-we). The primary requirement is to evaluate testing approaches (unit tests with mocks vs integration tests vs hybrid), research SurrealDB testing viability, select the most pragmatic approach for the project's current stage, and validate it with **3 example tests** (revised from 2). The framework must balance maintainability, setup complexity, and confidence level while aligning with the Constitution's principle of avoiding over-engineering.
+
+**Key Decision**: Use SurrealDB in-memory mode (`kv-mem`) for fast, isolated testing with zero infrastructure dependencies. Validate with 3 tests: (1) unit test for type conversions, (2) integration test with mock auth, and (3) integration test with full auth middleware chain.
 
 ## Technical Context
 

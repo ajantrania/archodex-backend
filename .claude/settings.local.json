@@ -8,7 +8,8 @@
       "WebFetch(domain:surrealdb.com)",
       "WebFetch(domain:research.google.com)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:docs.rs)"
+      "WebFetch(domain:docs.rs)",
+      "Read(//Users/ajantrania/code/archodex/surrealdb/**)"
     ],
     "deny": []
   }

@@ -1,0 +1,335 @@
+openapi: 3.0.3
+info:
+  title: Archodex Self-Hosted Plan Fetch API
+  description: |
+    API for self-hosted Archodex backends to fetch plan limits from archodex.com.
+
+    **Phase 2 Implementation** - This API is part of the self-hosted extension phase.
+
+    **Security Model**:
+    - Self-hosted backends authenticate using a cryptographically-secure shared secret
+    - Secret follows the same AES-GCM authenticated encryption pattern as report API keys
+    - Prevents self-hosted operators from bypassing limits by modifying local database
+
+    **Caching Behavior**:
+    - Self-hosted backends cache plan limits locally
+    - Default refresh interval: 60 minutes (configurable: 5 min - 1 day)
+    - Cache expiration: 3 days (72 hours)
+    - After expiration, ingestion is rejected until connection to archodex.com is restored
+  version: 1.0.0
+  contact:
+    name: Archodex Engineering
+
+servers:
+  - url: https://api.archodex.com/v1
+    description: Production archodex.com (plan authority)
+
+tags:
+  - name: Self-Hosted
+    description: Plan limit fetching for self-hosted backends
+
+paths:
+  /{account_id}/plan:
+    get:
+      tags: [Self-Hosted]
+      summary: Fetch plan limits (dual auth: self-hosted or frontend)
+      description: |
+        Retrieves the current plan limits for an account.
+
+        **Dual Authentication Support**:
+        - **Self-hosted backends**: Use `Authorization: Bearer archodex_selfhosted_{account_id}_{base64}`
+        - **Frontend (future)**: Use Cognito JWT token (user must have access to account)
+        - Backend detects auth type automatically from token format
+
+        **Self-Hosted Authentication**:
+        - Uses bearer token with format: `archodex_selfhosted_{account_id}_{base64_protobuf}`
+        - Token contains AES-GCM encrypted account ID with AAD binding
+        - Token is created by Archodex employees and provided to self-hosted operator during setup
+        - Account ID in token must match `{account_id}` path parameter
+
+        **Response Caching** (self-hosted only):
+        - Self-hosted backend should cache the response
+        - Recommended refresh interval: 60 minutes (operator-configurable)
+        - `cached_until` field provides server hint for next fetch time
+
+        **Error Handling** (self-hosted):
+        - If archodex.com is unreachable, use cached limits (up to 3 days old)
+        - After 3 days without successful fetch, reject all ingestion
+        - Log warnings when using cached limits, errors when cache expired
+
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[1-9][0-9]{9}$'
+          description: 10-digit account ID
+          example: "1234567890"
+
+      security:
+        - SelfHostedCredential: []
+        - CognitoJWT: []
+
+      responses:
+        '200':
+          description: Plan limits retrieved successfully
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "private, max-age=3600"
+              description: Caching directive (max-age in seconds)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanLimitsResponse'
+              examples:
+                team:
+                  summary: Team plan limits
+                  value:
+                    account_id: "1234567890"
+                    plan:
+                      plan_name: "Team"
+                      max_resources: 500
+                      max_events_per_hour: 1000
+                      update_frequency_seconds: 1200
+                    cached_until: "2025-10-10T15:00:00Z"
+                custom:
+                  summary: Custom unlimited plan
+                  value:
+                    account_id: "9876543210"
+                    plan:
+                      plan_name: "Custom"
+                      max_resources: null
+                      max_events_per_hour: null
+                      update_frequency_seconds: 60
+                    cached_until: "2025-10-10T15:00:00Z"
+                organization:
+                  summary: Organization plan with custom limits
+                  value:
+                    account_id: "5555555555"
+                    plan:
+                      plan_name: "Organization"
+                      max_resources: 7500
+                      max_events_per_hour: 15000
+                      update_frequency_seconds: 120
+                    cached_until: "2025-10-10T15:00:00Z"
+
+        '401':
+          description: Unauthorized - invalid or missing self-hosted credential
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_credential:
+                  value:
+                    error: "Unauthorized"
+                    message: "Invalid self-hosted credential"
+                missing_credential:
+                  value:
+                    error: "Unauthorized"
+                    message: "Missing Authorization header"
+                decryption_failed:
+                  value:
+                    error: "Unauthorized"
+                    message: "Credential decryption failed (tampered or wrong key)"
+
+        '403':
+          description: Forbidden - credential has been revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Forbidden"
+                message: "Self-hosted credential has been revoked"
+
+        '404':
+          description: Not Found - account does not exist or has no plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Not Found"
+                message: "No plan found for account 1234567890"
+
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '503':
+          description: Service Unavailable - archodex.com database temporarily down
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Service Unavailable"
+                message: "Plan service temporarily unavailable. Retry in 60 seconds."
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                example: 60
+              description: Seconds to wait before retrying
+
+components:
+  securitySchemes:
+    SelfHostedCredential:
+      type: http
+      scheme: bearer
+      bearerFormat: Custom
+      description: |
+        Self-hosted credential with format: `archodex_selfhosted_{account_id}_{base64_protobuf}`
+
+        Example: `archodex_selfhosted_1234567890_ChAKDjEyMzQ1Njc4OTAxMBIQ...`
+
+        Credential structure (protobuf):
+        - version: uint32 (always 1)
+        - account_id: fixed64
+        - credential_nonce: bytes (12 bytes for AES-GCM)
+        - encrypted_secret: bytes (AES-128-GCM encrypted)
+
+        AAD (Additional Authenticated Data):
+        - account_id: fixed64
+        - purpose: string (always "self-hosted-config-fetch")
+
+        Credentials are created by Archodex employees via admin API and provided
+        to self-hosted operators during account setup.
+
+    CognitoJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        AWS Cognito JWT token for authenticated frontend users.
+
+        **Authorization**:
+        - User must have access to the account specified in the path parameter
+        - Account access is verified via user's Cognito groups or account claims
+        - Used by frontend dashboard to display current plan limits
+
+        **Detection**:
+        - Backend detects Cognito JWT by token format (standard JWT structure)
+        - Self-hosted credentials start with `archodex_selfhosted_` prefix
+
+  schemas:
+    PlanLimitsResponse:
+      type: object
+      required:
+        - account_id
+        - plan
+        - cached_until
+      properties:
+        account_id:
+          type: string
+          pattern: '^[1-9][0-9]{9}$'
+          description: 10-digit account ID (matches credential)
+          example: "1234567890"
+        plan:
+          $ref: '#/components/schemas/PlanLimits'
+        cached_until:
+          type: string
+          format: date-time
+          description: |
+            Server hint for when to fetch next update (ISO 8601).
+            Typically current_time + 60 minutes.
+            Self-hosted backend may use shorter interval if configured.
+          example: "2025-10-10T15:00:00Z"
+
+    PlanLimits:
+      type: object
+      required:
+        - update_frequency_seconds
+      properties:
+        plan_name:
+          type: string
+          nullable: true
+          description: Optional plan label (e.g., "Team", "Organization", "Custom")
+          example: "Team"
+        max_resources:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 0
+          description: |
+            Maximum resources allowed for this account.
+            - null: Unlimited resources
+            - positive integer: Specific limit
+          example: 500
+        max_events_per_hour:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 0
+          description: |
+            Maximum events per hour allowed for this account.
+            - null: Unlimited events
+            - positive integer: Specific limit
+          example: 1000
+        update_frequency_seconds:
+          type: integer
+          format: int32
+          minimum: 60
+          maximum: 1200
+          description: Minimum seconds between agent updates to backend
+          example: 1200
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error type/category
+          example: "Unauthorized"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Invalid self-hosted credential"
+        retry_after:
+          type: integer
+          nullable: true
+          description: Optional hint for retry delay in seconds (for 503 errors)
+          example: 60
+
+# Implementation Notes (not part of OpenAPI spec, for developer reference)
+#
+# Self-Hosted Backend Implementation:
+#
+# 1. Startup behavior:
+#    - Read ARCHODEX_SELF_HOSTED_CREDENTIAL from environment
+#    - Immediately fetch plan limits (blocking)
+#    - If fetch fails and no cache exists, refuse to start
+#    - If fetch succeeds, cache limits and start serving
+#
+# 2. Periodic refresh:
+#    - Default interval: 60 minutes (env: PLAN_FETCH_INTERVAL_SECONDS)
+#    - Min: 300 seconds (5 min), Max: 86400 seconds (1 day)
+#    - Refresh in background, don't block ingestion
+#    - On failure, continue using cached limits
+#
+# 3. Cache expiration:
+#    - Track cache timestamp in local state (not persisted DB)
+#    - If cache_age > 3 days (259200 seconds):
+#      - Reject all ingestion with clear error
+#      - Log critical error
+#      - Continue attempting refresh in background
+#
+# 4. Limit enforcement:
+#    - Use cached limits for all ingestion requests
+#    - No database lookup needed (limits in memory)
+#    - When limits update via refresh, apply immediately
+#
+# Environment variables:
+# - ARCHODEX_SELF_HOSTED_CREDENTIAL (required): Bearer token
+# - PLAN_FETCH_INTERVAL_SECONDS (optional, default 3600): Refresh interval
+# - ARCHODEX_COM_URL (optional, default "https://api.archodex.com"): archodex.com base URL

@@ -294,7 +294,10 @@ pub(crate) async fn report(
 ) -> Result<()> {
     let db = account.resources_db().await?;
 
-    info!("Received report payload: {}", serde_json::to_string_pretty(&req).unwrap_or_else(|e| format!("Failed to serialize: {e}")));
+    info!(
+        "Received report payload: {}",
+        serde_json::to_string_pretty(&req).unwrap_or_else(|e| format!("Failed to serialize: {e}"))
+    );
 
     let mut query = db.query(BeginStatement::default());
 

@@ -10,6 +10,7 @@ mod report;
 mod report_api_key;
 mod report_api_keys;
 mod resource;
+mod state;
 mod surrealdb_deserializers;
 mod user;
 mod value;

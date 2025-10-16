@@ -187,6 +187,7 @@ dependencies = [
  "aes-gcm",
  "archodex-com",
  "archodex-error",
+ "async-trait",
  "axum",
  "axum-extra",
  "axum-macros",

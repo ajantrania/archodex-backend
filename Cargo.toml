@@ -62,6 +62,7 @@ rocksdb = ["surrealdb/kv-rocksdb"]
 aes-gcm.workspace = true
 archodex-com = { path = "archodex-com", optional = true }
 archodex-error.workspace = true
+async-trait = "0.1"
 axum.workspace = true
 axum-extra = { version = "0.9.6", default-features = false }
 axum-macros = "0.4.2"

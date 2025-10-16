@@ -258,3 +258,28 @@ impl From<&Account> for surrealdb::sql::Thing {
         surrealdb::sql::Thing::from(("account", surrealdb::sql::Id::String(account.id.clone())))
     }
 }
+
+/// Wrapper for authenticated account with injected resources database
+///
+/// This type separates the authentication concern from the domain Account type.
+/// After middleware authenticates a request and loads the account, it creates
+/// an AuthedAccount with both the account data and the appropriate resources
+/// database connection. This ensures handlers always have both pieces of information
+/// without needing to look up the database separately.
+///
+/// # Design Rationale
+/// - Keeps Account as a pure domain object (no database connection field)
+/// - No runtime Option unwrapping needed (resources_db is always present)
+/// - Clear ownership and intent at the type level
+/// - Compile-time guarantee that handlers have database access
+pub(crate) struct AuthedAccount {
+    pub account: Account,
+    pub resources_db: DBConnection,
+}
+
+impl AuthedAccount {
+    /// Returns the account ID
+    pub fn account_id(&self) -> &str {
+        &self.account.id
+    }
+}

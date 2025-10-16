@@ -1,9 +1,9 @@
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use axum::{
     Extension,
-    extract::{Path, Request},
+    extract::{Path, Request, State},
     middleware::Next,
     response::Response,
 };
@@ -17,9 +17,10 @@ use tracing::{info, instrument, warn};
 
 use crate::{
     Result,
-    account::{Account, AccountQueries},
+    account::{Account, AccountQueries, AuthedAccount},
     auth::{DashboardAuth, ReportApiKeyAuth},
     env::Env,
+    state::{AppState, GlobalResourcesDbFactory},
 };
 use archodex_error::{
     anyhow::{self, Context as _},
@@ -260,6 +261,24 @@ pub(crate) async fn resources_db(
     db.use_ns(namespace).use_db("resources").await?;
 
     Ok(DBConnection::Concurrent(db))
+}
+
+/// Creates production AppState with global database connections
+///
+/// This function initializes the application state for production use,
+/// setting up the global resources database factory. The factory uses
+/// the same global connection pooling as before, ensuring zero performance overhead.
+///
+/// # Returns
+/// AppState configured for production with:
+/// - resources_db_factory: GlobalResourcesDbFactory for per-account DBs
+#[instrument(err)]
+pub async fn create_production_state() -> Result<AppState> {
+    let resources_db_factory = Arc::new(GlobalResourcesDbFactory);
+
+    Ok(AppState {
+        resources_db_factory,
+    })
 }
 
 #[instrument(err, skip_all)]

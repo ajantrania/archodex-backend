@@ -229,15 +229,13 @@ pub(super) async fn get(
 mod tests {
     use super::*;
     use crate::resource::ResourceId;
-    use surrealdb::sql::{Object, Value, Strand};
+    use surrealdb::sql::{Object, Strand, Value};
 
     #[test]
     fn test_principal_chain_id_part_round_trip() {
         // Create test ResourceId using the test helper
-        let resource_id = ResourceId::from_parts(vec![
-            ("partition", "aws"),
-            ("account", "123456789012"),
-        ]);
+        let resource_id =
+            ResourceId::from_parts(vec![("partition", "aws"), ("account", "123456789012")]);
 
         // Create PrincipalChainIdPart with event
         let original = PrincipalChainIdPart {
@@ -295,10 +293,12 @@ mod tests {
         // Attempt to convert should fail
         let result = PrincipalChainIdPart::try_from(obj);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("missing the `id` key"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("missing the `id` key")
+        );
     }
 
     #[test]
@@ -314,9 +314,11 @@ mod tests {
         // Attempt to convert should fail
         let result = PrincipalChainIdPart::try_from(obj);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("invalid `event` value"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid `event` value")
+        );
     }
 }

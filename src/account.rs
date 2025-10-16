@@ -122,6 +122,28 @@ impl Account {
         &self.salt
     }
 
+    /// Creates an Account for testing purposes
+    ///
+    /// This bypasses the normal account creation flow and allows tests to inject
+    /// account state directly. Only compiled in test builds.
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(id: String, salt: Vec<u8>) -> Self {
+        Self {
+            id,
+            #[cfg(feature = "archodex-com")]
+            endpoint: "test.archodex.com".to_string(),
+            #[cfg(feature = "archodex-com")]
+            service_data_surrealdb_url: None,
+            salt,
+            #[cfg(not(feature = "archodex-com"))]
+            api_private_key: None,
+            created_at: None,
+            created_by: None,
+            deleted_at: None,
+            deleted_by: None,
+        }
+    }
+
     pub(crate) async fn resources_db(&self) -> anyhow::Result<DBConnection> {
         #[cfg(not(feature = "archodex-com"))]
         let service_data_surrealdb_url = Env::surrealdb_url();

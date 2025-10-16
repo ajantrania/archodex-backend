@@ -138,6 +138,25 @@ impl<'de> Deserialize<'de> for ResourceIdPart {
 #[derive(Clone, Debug, Eq, Serialize, PartialEq)]
 pub(crate) struct ResourceId(Vec<ResourceIdPart>);
 
+#[cfg(test)]
+impl ResourceId {
+    /// Creates a ResourceId from a vector of (type, id) string pairs for testing
+    pub(crate) fn from_parts(parts: Vec<(&str, &str)>) -> Self {
+        let array = surrealdb::sql::Array::from(
+            parts
+                .into_iter()
+                .map(|(r#type, id)| {
+                    surrealdb::sql::Value::Array(surrealdb::sql::Array::from(vec![
+                        surrealdb::sql::Value::Strand(r#type.into()),
+                        surrealdb::sql::Value::Strand(id.into()),
+                    ]))
+                })
+                .collect::<Vec<_>>(),
+        );
+        ResourceId::try_from(array).unwrap()
+    }
+}
+
 impl std::ops::Deref for ResourceId {
     type Target = Vec<ResourceIdPart>;
 

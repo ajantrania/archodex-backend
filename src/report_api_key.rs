@@ -120,6 +120,12 @@ impl ReportApiKey {
     pub(crate) async fn validate_value(
         report_api_key_value: &str,
     ) -> anyhow::Result<(String, u32)> {
+        // Test bypass: allows "test_token_{account_id}" format in test builds only
+        #[cfg(test)]
+        if let Some(account_id) = report_api_key_value.strip_prefix("test_token_") {
+            return Ok((account_id.to_string(), 99999));
+        }
+
         let Some(key_id) = report_api_key_value.strip_prefix("archodex_report_api_key_") else {
             bail!("Invalid report key value: Missing prefix");
         };

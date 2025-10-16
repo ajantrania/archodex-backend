@@ -224,3 +224,99 @@ pub(super) async fn get(
         None => not_found!("Principal chain does not exist"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resource::ResourceId;
+    use surrealdb::sql::{Object, Value, Strand};
+
+    #[test]
+    fn test_principal_chain_id_part_round_trip() {
+        // Create test ResourceId using the test helper
+        let resource_id = ResourceId::from_parts(vec![
+            ("partition", "aws"),
+            ("account", "123456789012"),
+        ]);
+
+        // Create PrincipalChainIdPart with event
+        let original = PrincipalChainIdPart {
+            id: resource_id.clone(),
+            event: Some("s3:PutObject".to_string()),
+        };
+
+        // Convert to SurrealDB Value
+        let surreal_value: Value = original.clone().into();
+        let surreal_object = match surreal_value {
+            Value::Object(obj) => obj,
+            _ => panic!("Expected Object, got {:?}", surreal_value),
+        };
+
+        // Convert back to PrincipalChainIdPart
+        let parsed = PrincipalChainIdPart::try_from(surreal_object).unwrap();
+
+        // Verify round-trip correctness
+        assert_eq!(parsed.id, original.id);
+        assert_eq!(parsed.event, original.event);
+    }
+
+    #[test]
+    fn test_principal_chain_id_part_without_event() {
+        // Create test ResourceId using the test helper
+        let resource_id = ResourceId::from_parts(vec![("partition", "aws")]);
+
+        // Create PrincipalChainIdPart without event
+        let original = PrincipalChainIdPart {
+            id: resource_id.clone(),
+            event: None,
+        };
+
+        // Convert to SurrealDB Value
+        let surreal_value: Value = original.clone().into();
+        let surreal_object = match surreal_value {
+            Value::Object(obj) => obj,
+            _ => panic!("Expected Object"),
+        };
+
+        // Convert back
+        let parsed = PrincipalChainIdPart::try_from(surreal_object).unwrap();
+
+        // Verify round-trip correctness (event should be None)
+        assert_eq!(parsed.id, original.id);
+        assert_eq!(parsed.event, None);
+    }
+
+    #[test]
+    fn test_principal_chain_id_part_invalid_object_missing_id() {
+        // Create object missing the `id` key
+        let mut obj = Object::default();
+        obj.insert("event".to_string(), Value::Strand(Strand::from("test")));
+
+        // Attempt to convert should fail
+        let result = PrincipalChainIdPart::try_from(obj);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("missing the `id` key"));
+    }
+
+    #[test]
+    fn test_principal_chain_id_part_invalid_event_type() {
+        // Create test ResourceId using the test helper
+        let resource_id = ResourceId::from_parts(vec![("partition", "aws")]);
+
+        // Create object with invalid event value (number instead of string)
+        let mut obj = Object::default();
+        obj.insert("id".to_string(), Value::from(resource_id));
+        obj.insert("event".to_string(), Value::from(123)); // Invalid: should be string
+
+        // Attempt to convert should fail
+        let result = PrincipalChainIdPart::try_from(obj);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid `event` value"));
+    }
+}

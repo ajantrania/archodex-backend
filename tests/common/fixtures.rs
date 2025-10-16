@@ -158,9 +158,7 @@ pub struct TestUser {
 
 /// Creates a test user with the given ID
 pub fn create_test_user(id: &str) -> TestUser {
-    TestUser {
-        id: id.to_string(),
-    }
+    TestUser { id: id.to_string() }
 }
 
 /// Generates a random account salt for testing

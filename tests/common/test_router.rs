@@ -25,6 +25,5 @@ use axum::{Router, routing::get};
 /// }
 /// ```
 pub fn create_test_router() -> Router {
-    Router::new()
-        .route("/health", get(|| async { "Ok" }))
+    Router::new().route("/health", get(|| async { "Ok" }))
 }

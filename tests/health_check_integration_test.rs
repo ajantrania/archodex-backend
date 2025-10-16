@@ -5,7 +5,10 @@
 
 mod common;
 
-use axum::{body::Body, http::{Request, StatusCode}};
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
 use tower::ServiceExt; // for oneshot()
 
 #[tokio::test]
@@ -19,7 +22,7 @@ async fn test_health_endpoint() {
             Request::builder()
                 .uri("/health")
                 .body(Body::empty())
-                .unwrap()
+                .unwrap(),
         )
         .await
         .unwrap();

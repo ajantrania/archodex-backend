@@ -1,8 +1,8 @@
 // Database setup helpers for testing
 
-use surrealdb::{Surreal, engine::local::Mem};
-use surrealdb::engine::local::Db;
 use super::fixtures::TestAccount;
+use surrealdb::engine::local::Db;
+use surrealdb::{Surreal, engine::local::Mem};
 
 /// Creates an in-memory SurrealDB instance for testing
 ///

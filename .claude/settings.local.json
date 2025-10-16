@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr view:*)",
+      "WebSearch",
+      "WebFetch(domain:surrealdb.com)",
+      "WebFetch(domain:research.google.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.rs)",
+      "Read(//Users/ajantrania/code/archodex/surrealdb/**)",
+      "Bash(cargo test:*)",
+      "Bash(.specify/scripts/bash/create-new-feature.sh:*)",
+      "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
+      "Bash(.specify/scripts/bash/setup-plan.sh:*)",
+      "Bash(.specify/scripts/bash/update-agent-context.sh:*)",
+      "Bash(.specify/scripts/bash/*:*)",
+      "Bash(awk '{\n  if ($2 == \"\"\"\"[x]\"\"\"\" || $2 == \"\"\"\"[X]\"\"\"\") completed++;\n  total++;\n}\nEND {\n  incomplete = total - completed;\n  print \"\"\"\"Total: \"\"\"\" total;\n  print \"\"\"\"Completed: \"\"\"\" completed;\n  print \"\"\"\"Incomplete: \"\"\"\" incomplete;\n  if (incomplete == 0) print \"\"\"\"Status: PASS\"\"\"\"; else print \"\"\"\"Status: FAIL\"\"\"\";\n}')",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo :*)",
+      "Bash(awk:*)",
+      "Bash(cargo build:*)"
+    ],
+    "deny": []
+  }
+}

@@ -11,7 +11,7 @@
 
 A developer writing integration tests for the report ingestion endpoint needs to validate that reports are correctly stored in the database. Currently, the test cannot verify database state because `Account::resources_db()` uses global static connections that cannot be replaced with in-memory test databases.
 
-**Why this priority**: This is the foundational blocker preventing comprehensive integration testing. Without database injection, tests can only validate HTTP status codes, not actual business logic or data persistence.
+**Why this priority**: This is the foundational blocker preventing comprehensive integration testing. Without dependency injection, tests can only validate HTTP status codes, not actual business logic or data persistence.
 
 **Independent Test**: Can be fully tested by writing a test that creates an in-memory database, injects it into an Account, calls report ingestion logic, and verifies the resources were stored correctly. Success means the test can query the injected database and assert on the stored data.
 
@@ -66,14 +66,14 @@ Middleware functions like `report_api_key_account` (src/db.rs:296) and `dashboar
 
 ### Functional Requirements
 
-- **FR-001**: System MUST allow tests to inject custom database connections into Account instances
+- **FR-001**: System MUST allow tests to inject custom database connections via AuthedAccount wrapper (authentication wrapper that holds Account and injected resources DB connection)
 - **FR-002**: System MUST preserve existing global connection pooling behavior for production code (archodex-com and self-hosted)
 - **FR-003**: `Account::resources_db()` method MUST return the injected connection when present, otherwise fall back to global connection
 - **FR-004**: Middleware functions (`dashboard_auth_account`, `report_api_key_account`) MUST support loading accounts with injected database connections for testing
 - **FR-005**: System MUST maintain test isolation—each test gets independent database connections with no shared state
 - **FR-006**: Production code MUST NOT include test-specific connection handling logic in release builds (use `#[cfg(test)]` appropriately)
 - **FR-007**: System MUST support injection for both accounts database and resources database connections
-- **FR-008**: Axum extension pattern MUST work correctly with injected database connections (handlers extract `Extension<Account>` with injected DB)
+- **FR-008**: Axum extension pattern MUST work correctly with injected database connections (handlers extract `Extension<AuthedAccount>` which wraps Account with injected DB)
 - **FR-009**: Test helper functions MUST provide ergonomic APIs for creating accounts with injected connections (e.g., `Account::new_for_testing_with_db()`)
 - **FR-010**: System MUST handle connection lifetimes correctly—injected connections live as long as the test, global connections remain static
 
@@ -89,8 +89,8 @@ Middleware functions like `report_api_key_account` (src/db.rs:296) and `dashboar
 
 - **SC-001**: Test code can create an Account with injected database, call report ingestion, and query the injected database to verify 100% of stored resources match the request
 - **SC-002**: Tests using injected databases execute within same performance targets as specified in 002-specs-001-rate research.md (unit tests <1s, integration tests <5s, full suite <30s)
-- **SC-003**: Production code shows zero performance regression—API response times remain within 5% of baseline measurements
+- **SC-003**: Production code shows no measurable performance regression—API response times remain within 5% of baseline measurements (within 5% is considered zero impact given measurement variance)
 - **SC-004**: Test isolation is complete—100 consecutive test runs with parallel execution produce identical, deterministic results with no flaky tests
 - **SC-005**: Existing production functionality works identically—all manual testing scenarios (account creation, report ingestion, dashboard queries) complete successfully with no behavioral changes
-- **SC-006**: Developer experience is smooth—new integration tests can be written following documented patterns within 20 minutes, including database injection setup
+- **SC-006**: Developer experience is smooth—new integration tests can be written following documented patterns within 20 minutes, including dependency injection setup
 

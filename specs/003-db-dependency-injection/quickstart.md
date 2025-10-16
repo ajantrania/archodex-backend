@@ -36,7 +36,7 @@ async fn test_report_endpoint_rejects_invalid_token() {
 ### After: Full Integration Testing
 
 ```rust
-// tests/report_integration_test.rs (with database injection via State)
+// tests/report_integration_test.rs (with dependency injection via State)
 #[tokio::test]
 async fn test_report_creates_resources_in_database() {
     // 1. Create test databases

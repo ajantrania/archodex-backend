@@ -56,7 +56,14 @@ impl ResourcesDbFactory for GlobalResourcesDbFactory {
         account_id: &str,
         service_url: Option<&str>,
     ) -> anyhow::Result<DBConnection> {
+        #[cfg(not(feature = "archodex-com"))]
         let url = service_url.unwrap_or_else(|| Env::surrealdb_url());
+
+        #[cfg(feature = "archodex-com")]
+        let url = service_url.expect(
+            "service_url must be provided for archodex-com builds - account.service_data_surrealdb_url() should always return Some()"
+        );
+
         resources_db(url, account_id).await
     }
 }

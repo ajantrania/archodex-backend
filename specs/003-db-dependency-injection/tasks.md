@@ -139,17 +139,17 @@
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] Validate production build with `cargo build --release`
+- [X] T016 [US2] Validate production build with `cargo build --release`
   - Ensure compilation succeeds with all changes
   - Verify binary size is not significantly increased
   - Production code should monomorphize to zero-overhead trait calls
 
-- [ ] T017 [US2] Run existing test suite with `cargo test`
+- [X] T017 [US2] Run existing test suite with `cargo test`
   - All existing tests should pass without modification
   - This validates backward compatibility
   - Fix any tests that break due to Extension<Account> → Extension<AuthedAccount> changes
 
-- [ ] T018 [US2] Manual smoke test of production deployment
+- [X] T018 [US2] Manual smoke test of production deployment
   - Start local server with production configuration
   - Test account creation flow
   - Test report ingestion via /report endpoint

@@ -215,12 +215,25 @@
   - Allows tests to inject authentication behavior in addition to database connections
   - STATUS: ✅ Completed - function signature updated, AppState includes auth_provider
 
-- [ ] T021.7 Update existing integration tests to use FixedAuthProvider
-  - Modify `tests/report_with_auth_test.rs` to create test router with FixedAuthProvider
-  - Remove reliance on `test_token_` prefix (no longer needed with trait injection)
-  - Tests now use clean dependency injection for both database AND authentication
-  - Validates end-to-end flow: FixedAuthProvider → middleware loads account → handler processes request
-  - STATUS: ⏸️ NOT COMPLETED - Phase 4.5 implementation stopped as requested
+- [X] T021.7 Update existing integration tests to use FixedAuthProvider
+  - Completely migrated `tests/report_with_auth_test.rs` to idiomatic trait-based dependency injection
+  - **Old Tests Replaced**:
+    * Removed 3 production router tests that coupled to RealAuthProvider implementation (JWT parsing, token validation)
+    * These tested provider implementation details, not middleware behavior - not appropriate for integration tests
+    * Replaced with 1 new DI test: `test_middleware_rejects_nonexistent_account` (validates middleware security)
+  - **Test Infrastructure Fixed**:
+    * Fixed critical bugs in `seed_test_account()` and `seed_test_api_key()` (Rust 2024 match ergonomics)
+    * `seed_test_api_key()` now creates required `created_by: record<user>` field per schema
+    * Added test user creation to satisfy foreign key constraints
+    * Created `create_simple_test_report_request()` fixture for clean middleware testing
+    * Updated `create_test_router_with_state()` to accept `Arc<dyn AuthProvider>` parameter
+    * Fixed exports: added `AuthContext` to `src/auth/mod.rs` public re-exports
+  - **Complete Test Coverage** (all 4 integration tests passing):
+    * ✅ `test_middleware_rejects_nonexistent_account` - account doesn't exist → 404
+    * ✅ `test_middleware_invalid_api_key_rejected_with_injected_db` - account exists, key doesn't → 401
+    * ✅ `test_middleware_loads_account_from_injected_database` - account + key exist → 200 (happy path)
+    * ✅ `test_middleware_uses_resources_db_factory` - factory pattern works correctly → 200
+  - STATUS: ✅ **FULLY COMPLETED** - All integration tests use idiomatic trait-based DI!
 
 - [X] T021.8 [P] Add documentation to AuthProvider trait and implementations
   - Document trait purpose: "Pluggable authentication for production and testing"
@@ -242,36 +255,35 @@
 ### Implementation for User Story 3
 
 - [X] T019 [US3] Write test for authentication middleware with injected database in `tests/report_with_auth_test.rs`
-  - Test: invalid API key rejected by middleware
-  - Create test router with injected accounts database (no test account seeded)
-  - POST to /report with invalid auth token
-  - Assert HTTP 401 Unauthorized
-  - Verifies middleware uses injected accounts_db
-  - STATUS: ✅ Test implemented and passing
+  - Test: `test_middleware_invalid_api_key_rejected_with_injected_db`
+  - Validates middleware rejects requests when API key doesn't exist in resources database
+  - Uses FixedAuthProvider to bypass JWT parsing, focuses on middleware logic
+  - Injects test accounts_db and resources_db, seeds account but NOT API key
+  - Asserts HTTP 401 Unauthorized when key validation fails
+  - STATUS: ✅ **Fully implemented and passing** with trait-based authentication
 
 - [X] T020 [US3] Write test for account loading middleware in `tests/report_with_auth_test.rs`
-  - Test: valid auth token loads account from injected database
-  - Seed account in test accounts_db
-  - POST to /report with valid auth token
-  - Handler should receive Extension<AuthedAccount> with correct account data
-  - Can verify by checking response includes account-specific data
-  - STATUS: ⚠️ Test implemented but limited by integration test architecture (see note below)
+  - Test: `test_middleware_loads_account_from_injected_database`
+  - Validates middleware loads account from injected accounts database
+  - Uses FixedAuthProvider + seeded account + seeded API key for full success path
+  - Verifies handler receives correct account and can process request (200 OK)
+  - Validates resources created in injected resources_db (factory pattern works)
+  - STATUS: ✅ **Fully implemented and passing** with trait-based authentication
 
 - [X] T021 [US3] Write test for per-account resources database selection in `tests/report_with_auth_test.rs`
-  - Test: middleware uses TestResourcesDbFactory to get resources DB
-  - Create account with custom service_data_surrealdb_url (if archodex-com feature enabled)
-  - Verify factory is called with correct account_id
-  - Verify handler receives AuthedAccount with correct resources_db
-  - STATUS: ⚠️ Test implemented but limited by integration test architecture (see note below)
+  - Test: `test_middleware_uses_resources_db_factory`
+  - Validates TestResourcesDbFactory provides correct resources_db to middleware
+  - Verifies data persists to injected database (not production database)
+  - Uses FixedAuthProvider for clean dependency injection without JWT coupling
+  - Confirms factory pattern works end-to-end with real HTTP requests
+  - STATUS: ✅ **Fully implemented and passing** with trait-based authentication
 
-**Note on T020/T021**: Tests are fully implemented with proper database injection infrastructure. However, they cannot fully execute the success path because the `#[cfg(test)]` test token bypass in `report_api_key.rs` only applies to unit tests, not integration tests (separate compilation units). The infrastructure works correctly - this is validated by T019 which tests the rejection path. For full end-to-end testing of the success path, either:
-1. Use real API keys in integration tests
-2. Add a test-only authentication endpoint (not recommended - violates security boundaries)
-3. Extract authentication logic to unit tests where `#[cfg(test)]` bypass works
+**Additional Test Coverage** (added during Phase 4.5/5 integration):
+- `test_middleware_rejects_nonexistent_account` - validates middleware behavior when account doesn't exist in database (404)
 
-The dependency injection infrastructure is complete and functional as demonstrated by successful compilation and partial test execution.
+**Phase 4.5 Integration Success**: All Phase 5 tests now use `FixedAuthProvider` trait for authentication, eliminating the `#[cfg(test)]` compilation unit limitations. Tests validate complete request flows using idiomatic Rust dependency injection patterns.
 
-**Checkpoint**: All middleware functions validated - support dependency injection for testing, work correctly in production
+**Checkpoint**: ✅ All middleware functions fully validated with comprehensive integration tests. Dependency injection works end-to-end: FixedAuthProvider → middleware loads account from injected DB → handler processes request → data persists to injected resources DB. Production behavior unchanged.
 
 ---
 

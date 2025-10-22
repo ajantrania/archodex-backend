@@ -1,44 +1,36 @@
-# Archodex Backend Testing Framework
+# Testing in Archodex Backend
 
-This directory contains the testing framework for the Archodex backend, implemented as part of feature `002-specs-001-rate`.
+This directory contains integration and unit tests for the Archodex backend. The testing framework uses dependency
+injection to replace production database connections and authentication with in-memory implementations, making tests
+fast and isolated.
 
-## Overview
-
-The testing framework uses **SurrealDB in-memory mode** (`kv-mem`) for fast, isolated testing with zero infrastructure dependencies. This approach aligns with the project's Constitution principle of avoiding over-engineering.
-
-## Structure
-
-```
-tests/
-├── common/              # Shared test helpers
-│   ├── mod.rs          # Module re-exports and setup utilities
-│   ├── db.rs           # Database setup functions
-│   ├── fixtures.rs     # Test data factories
-│   └── test_router.rs  # Test router helpers
-└── health_check_integration_test.rs  # Example integration test
-```
-
-## Quick Start
-
-### Running Tests
+## Running Tests
 
 ```bash
 # Run all tests
-cargo test
+cargo test -p archodex-backend
 
-# Run only unit tests
-cargo test --lib
+# Run only unit tests (inline in src/)
+cargo test -p archodex-backend --lib
+
+# Run only integration tests (in tests/)
+cargo test -p archodex-backend --test '*'
 
 # Run specific test
-cargo test test_principal_chain_id_part_round_trip
+cargo test -p archodex-backend test_middleware_loads_account
 
-# Run with output
-cargo test -- --nocapture
+# Show println output
+cargo test -p archodex-backend -- --nocapture
+
+# Show backtraces on failure
+RUST_BACKTRACE=1 cargo test -p archodex-backend
 ```
 
-### Writing a Unit Test
+## Writing Tests
 
-Unit tests go inline in source files using `#[cfg(test)] mod tests`:
+### Unit Tests
+
+Unit tests live inline with your code using `#[cfg(test)]`:
 
 ```rust
 // In src/your_module.rs
@@ -48,32 +40,65 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_something() {
-        // Your test code here
-        assert_eq!(1 + 1, 2);
+    fn test_conversion_logic() {
+        let result = your_function(input);
+        assert_eq!(result, expected);
     }
 }
 ```
 
-**Example**: See `src/principal_chain.rs:228` for real unit tests validating type conversions.
+Use unit tests for pure functions, type conversions, and validation logic that doesn't need external dependencies.
 
-### Writing an Integration Test
+Examples: see `test_principal_chain_id_part_round_trip` in `src/principal_chain.rs`
 
-Integration tests go in separate files in the `tests/` directory:
+### Integration Tests
+
+Integration tests live in the `tests/` directory and test complete request flows through the HTTP layer, middleware,
+handlers, and database.
+
+Here's a complete example:
 
 ```rust
-// tests/your_integration_test.rs
+// tests/your_feature_test.rs
 mod common;
 
 use axum::{body::Body, http::{Request, StatusCode}};
 use tower::ServiceExt;
 
 #[tokio::test]
-async fn test_your_endpoint() {
-    let app = common::create_test_router();
+async fn test_report_endpoint() {
+    // Create in-memory databases
+    let accounts_db = common::create_test_accounts_db().await;
+    let resources_db = common::create_test_resources_db().await;
 
+    // Seed test data
+    let account_id = "test_account_123";
+    let key_id = 99999;
+    common::seed_test_account(&accounts_db, account_id).await;
+    common::seed_test_api_key(&resources_db, key_id).await;
+
+    // Create auth provider that bypasses token validation
+    let auth_provider = common::create_fixed_auth_provider(account_id, key_id);
+
+    // Create router with injected dependencies
+    let app = common::create_test_router_with_state(
+        accounts_db,
+        resources_db,
+        auth_provider,
+    );
+
+    let payload = common::create_simple_test_report_request();
+
+    // Make request (no Authorization header needed with FixedAuthProvider)
     let response = app
-        .oneshot(Request::builder().uri("/endpoint").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/report")
+                .method("POST")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                .unwrap()
+        )
         .await
         .unwrap();
 
@@ -81,84 +106,99 @@ async fn test_your_endpoint() {
 }
 ```
 
-**Example**: See `tests/health_check_integration_test.rs` for a complete integration test.
+See `tests/report_with_auth_test.rs` for more examples.
 
-## Test Helpers
+### Test Helpers
 
-### Database Helpers (`common::db`)
+The `tests/common/` directory provides helpers for common test operations:
 
 ```rust
-use common::*;
+// Database creation
+let accounts_db = common::create_test_accounts_db().await;
+let resources_db = common::create_test_resources_db().await;
 
-// Create empty in-memory database
-let db = create_test_db().await;
+// Seeding test data
+common::seed_test_account(&accounts_db, "acc_123").await;
+common::seed_test_api_key(&resources_db, 99999).await;
 
-// Create database with migrations (schema)
-let db = create_test_db_with_migrations().await;
+// Authentication bypass
+let auth = common::create_fixed_auth_provider("acc_123", 99999);
 
-// Create database + test account
-let (db, account) = create_test_db_with_account("test_account_123").await;
+// Router creation
+let app = common::create_test_router_with_state(accounts_db, resources_db, auth);
 
-// Get shared accounts database
-let accounts_db = get_test_accounts_db().await;
+// Test data generation
+let payload = common::create_simple_test_report_request();
 ```
 
-### Test Data Fixtures (`common::fixtures`)
+## How It Works
+
+### Dependency Injection
+
+The testing framework uses trait-based dependency injection through `AppState`:
 
 ```rust
-use common::*;
-
-// Create test account
-let account = create_test_account("acc_001", "Test Account");
-
-// Create test user
-let user = create_test_user("user_123");
-
-// Create test auth token (for auth bypass in tests)
-let token = create_test_auth_token("acc_001");  // Returns: "test_token_acc_001"
-
-// Generate random salt
-let salt = create_test_account_salt();
-```
-
-### Test Router Helpers (`common::test_router`)
-
-```rust
-use common::*;
-
-// Create simple test router (no auth)
-let app = create_test_router();
-```
-
-## Test Patterns
-
-### Pattern 1: Pure Logic (Unit Test)
-
-Test business logic without external dependencies.
-
-```rust
-#[test]
-fn test_conversion_logic() {
-    let resource_id = ResourceId::from_parts(vec![
-        ("partition", "aws"),
-        ("account", "123456789012"),
-    ]);
-
-    let value: surrealdb::sql::Value = resource_id.into();
-    // Assert on value...
+pub struct AppState {
+    pub resources_db_factory: Arc<dyn ResourcesDbFactory + Send + Sync>,
+    pub auth_provider: Arc<dyn AuthProvider>,
 }
 ```
 
-**When to use**: Testing pure functions, type conversions, validation logic.
+This state is passed to all Axum handlers, allowing us to inject different implementations for production vs testing.
 
-### Pattern 2: Integration Test with Mock Auth
+### Database Factory
 
-Test HTTP endpoints with authentication bypassed.
+The `ResourcesDbFactory` trait abstracts database connection creation:
+
+- **Production**: `GlobalResourcesDbFactory` uses global connection pools
+- **Tests**: `TestResourcesDbFactory` returns pre-configured in-memory databases
+
+This means tests can seed data into a database, pass it to the router, and verify the results afterward—all using the
+same in-memory instance.
+
+### Authentication Provider
+
+The `AuthProvider` trait abstracts authentication:
+
+- **Production**: `RealAuthProvider` validates JWT/API keys cryptographically
+- **Tests**: `FixedAuthProvider` returns pre-configured auth context without validation
+
+This lets tests focus on handler logic without dealing with token generation or cryptographic operations.
+
+### In-Memory Databases
+
+Tests use SurrealDB's `kv-mem` backend, which:
+
+- Starts in microseconds (no container startup delay)
+- Runs entirely in memory (no cleanup needed)
+- Provides identical API to production backends (RocksDB, DynamoDB)
+- Isolates tests completely (each test gets fresh databases)
+
+The `kv-mem` feature is only enabled in `dev-dependencies`, so it never ships to production.
+
+### Feature Flags
+
+The `test-support` feature gates test utilities so they don't compile into production binaries. It's automatically
+enabled for integration tests:
+
+```toml
+[dev-dependencies]
+archodex-backend = { path = ".", features = ["test-support"] }
+```
+
+This exposes types like `AppState`, `DBConnection`, and test implementations through the
+`archodex_backend::test_support` module.
+
+## Common Patterns
+
+### Testing Public Endpoints
+
+For endpoints without authentication (like `/health`):
 
 ```rust
 #[tokio::test]
-async fn test_endpoint_logic() {
-    let app = create_test_router();  // No auth middleware
+async fn test_health_endpoint() {
+    let app = common::create_test_router();
 
     let response = app
         .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
@@ -169,111 +209,153 @@ async fn test_endpoint_logic() {
 }
 ```
 
-**When to use**: Testing handler logic in isolation from auth concerns.
+### Testing Authenticated Endpoints
 
-### Pattern 3: Integration Test with Full Auth (Coming in Phase 5)
+For endpoints that require authentication:
 
-Test complete request flow including authentication middleware.
+```rust
+#[tokio::test]
+async fn test_authenticated_endpoint() {
+    let accounts_db = common::create_test_accounts_db().await;
+    let resources_db = common::create_test_resources_db().await;
 
-**When to use**: Testing end-to-end flows with authentication.
+    // Seed required data
+    common::seed_test_account(&accounts_db, "acc_123").await;
+    common::seed_test_api_key(&resources_db, 99999).await;
 
-## Performance Characteristics
+    // Bypass authentication
+    let auth = common::create_fixed_auth_provider("acc_123", 99999);
 
-- **Unit tests**: <1ms per test
-- **Integration tests (in-memory)**: <50ms per test
-- **Full test suite**: <30 seconds target
+    let app = common::create_test_router_with_state(accounts_db, resources_db, auth);
 
-## Design Decisions
+    // Make request (no Authorization header needed)
+    let response = app.oneshot(/* ... */).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+```
 
-### Why In-Memory SurrealDB?
+### Testing Error Cases
 
-1. **Zero infrastructure**: No Docker, no containers, no setup
-2. **Fast**: Microsecond-level operations
-3. **Isolated**: Each test gets fresh database
-4. **API parity**: SurrealDB maintains identical API across all backends (mem, rocksdb, dynamodb)
+Test that middleware properly handles missing accounts or invalid keys:
 
-### Why Not Testcontainers?
+```rust
+#[tokio::test]
+async fn test_rejects_nonexistent_account() {
+    let accounts_db = common::create_test_accounts_db().await;
+    let resources_db = common::create_test_resources_db().await;
 
-- Adds 2-5 seconds per test for container startup
-- Requires Docker in development and CI
-- Unnecessary complexity for current project stage
-- Can add later if needed (Layer 2 tests)
+    // Don't seed account - test authentication with missing account
+    let auth = common::create_fixed_auth_provider("nonexistent", 99999);
+    let app = common::create_test_router_with_state(accounts_db, resources_db, auth);
 
-### Why Not Mocking?
+    let response = app.oneshot(/* ... */).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+```
 
-- Would require introducing trait abstraction layer (major refactor)
-- Archodex code uses SurrealDB-specific types extensively
-- Risk of mock/real implementation divergence
-- In-memory mode provides better production fidelity
+### Verifying Database Operations
 
-## Test Quality Requirements
+Access the injected database to verify operations:
 
-⚠️ **IMPORTANT**: All tests MUST be meaningful and test actual Archodex business logic.
+```rust
+#[tokio::test]
+async fn test_creates_resources() {
+    let accounts_db = common::create_test_accounts_db().await;
+    let resources_db = common::create_test_resources_db().await;
 
-### ✅ Good Tests
-- Test real production code (PrincipalChainIdPart conversions)
-- Validate business rules (resource ID validation)
-- Test error handling (missing fields, invalid types)
-- Test integration flows (HTTP → Handler → DB)
+    // ... setup and make request ...
 
-### ❌ Bad Tests
+    // Verify data was written
+    if let archodex_backend::test_support::DBConnection::Concurrent(ref db) = resources_db {
+        use surrealdb::sql::Thing;
+
+        let resources: Vec<Thing> = db
+            .query("SELECT VALUE id FROM resource")
+            .await
+            .unwrap()
+            .take(0)
+            .unwrap();
+
+        assert!(!resources.is_empty());
+    }
+}
+```
+
+## Test Quality
+
+Write tests that validate real business logic:
+
+**Good tests:**
+
+- Test actual production code behavior
+- Validate business rules and error handling
+- Test integration flows (HTTP → middleware → handler → database)
+- Verify authentication and authorization logic
+
+**Bad tests:**
+
 - Testing "1 + 1 = 2" just to have a passing test
 - Testing mock functions that return hardcoded values
 - Testing trivial getters/setters with no logic
-- Creating fake business logic just to have something to test
 
-**If you encounter a test that would be meaningless, STOP and report the issue rather than writing it.**
-
-## Current Test Coverage
-
-### Unit Tests (src/principal_chain.rs)
-- ✅ `test_principal_chain_id_part_round_trip` - TryFrom/From round-trip
-- ✅ `test_principal_chain_id_part_without_event` - Optional field handling
-- ✅ `test_principal_chain_id_part_invalid_object_missing_id` - Error handling
-- ✅ `test_principal_chain_id_part_invalid_event_type` - Type validation
-
-### Integration Tests
-- ✅ `test_health_endpoint` - Simple HTTP endpoint testing
-
-## Next Steps
-
-### Phase 5: Full Auth Middleware Testing (In Progress)
-- Add `#[cfg(test)]` constructors to auth types
-- Test complete authentication flow
-- Test report ingestion with auth
-
-### Phase 6: CI Integration (Requires Approval)
-- GitHub Actions workflow
-- Automated testing on every push
-- Clippy and formatting checks
-
-### Phase 7: Polish (Requires Approval)
-- Format all code
-- Verify test isolation and determinism
-- Update CLAUDE.md
+If you find yourself writing a meaningless test, stop and reconsider what you're trying to validate.
 
 ## Troubleshooting
 
 ### "Cannot find module `common`"
-- Ensure `tests/common/mod.rs` exists (NOT `tests/common.rs`)
+
+Ensure `tests/common/mod.rs` exists (NOT `tests/common.rs`). Rust treats `tests/common/` as a module only if it contains
+`mod.rs`.
 
 ### "kv-mem feature not enabled"
-- Check `Cargo.toml` has `surrealdb = { version = "= 2.3.7", features = ["rustls", "kv-mem"] }` in `[dev-dependencies]`
+
+Check that `Cargo.toml` has the `kv-mem` feature in dev-dependencies:
+
+```toml
+[dev-dependencies]
+surrealdb = { version = "= 2.3.7", features = ["rustls", "kv-mem"] }
+```
 
 ### Tests timing out
-- Ensure `#[tokio::test]` is used for async tests
+
+- Ensure `#[tokio::test]` is used for async tests (not `#[test]`)
 - Check for infinite loops or blocking operations
+- Verify database migrations complete successfully
 
-## Resources
+### "Type X is private"
 
-- **Feature Spec**: `specs/002-specs-001-rate/spec.md`
-- **Implementation Plan**: `specs/002-specs-001-rate/plan.md`
-- **Task Breakdown**: `specs/002-specs-001-rate/tasks.md`
-- **Research**: `specs/002-specs-001-rate/research.md`
-- **Quickstart Guide**: `specs/002-specs-001-rate/quickstart.md`
+The `test-support` feature gates certain types. Ensure your test file is in the `tests/` directory or uses
+`#[cfg(test)]`, which automatically enables the feature.
 
----
+### Authentication errors in tests
 
-**Status**: Framework operational and ready for use ✅
+Tests using `FixedAuthProvider` don't need Authorization headers. If you're getting auth errors:
 
-**Last Updated**: 2025-10-15
+- Verify you're using `create_test_router_with_state()` not `create_test_router()`
+- Check that you've seeded both the test account and API key
+- Ensure the account_id and key_id in FixedAuthProvider match the seeded data
+
+## File Reference
+
+### Production Code
+
+- `src/state.rs` - AppState and ResourcesDbFactory trait
+- `src/auth/provider.rs` - AuthProvider trait and implementations
+- `src/db.rs` - Production database connection management
+- `src/router.rs` - Router creation with dependency injection
+- `src/lib.rs` - test_support module exports
+
+### Test Infrastructure
+
+- `tests/common/mod.rs` - Test helper re-exports
+- `tests/common/db.rs` - Database creation and seeding
+- `tests/common/providers.rs` - TestResourcesDbFactory implementation
+- `tests/common/auth.rs` - FixedAuthProvider helpers
+- `tests/common/fixtures.rs` - Test data generation
+- `tests/common/test_router.rs` - Router creation with injected state
+
+### Example Tests
+
+- `tests/health_check_integration_test.rs` - Simple endpoint test
+- `tests/report_with_auth_test.rs` - Complete DI integration tests
+- `src/principal_chain.rs` - Unit test examples

@@ -5,7 +5,6 @@ pub use provider::{AuthProvider, RealAuthProvider};
 #[cfg(any(test, feature = "test-support"))]
 pub use provider::{AuthContext, FixedAuthProvider};
 
-// Re-export authentication middleware types from the root auth module
 use std::{collections::HashMap, time::SystemTime};
 
 use axum::{extract::Request, middleware::Next, response::Response};
@@ -201,11 +200,9 @@ pub(crate) struct ReportApiKeyAuth {
 }
 
 impl ReportApiKeyAuth {
-    /// Creates a ReportApiKeyAuth from validated credentials
+    /// Creates auth context from validated credentials.
     ///
-    /// This constructor should only be used after authentication has been validated
-    /// (e.g., via AuthProvider). It creates the auth context needed for further
-    /// access validation checks.
+    /// Only use after authentication validation (e.g., via AuthProvider).
     pub(crate) fn from_credentials(account_id: String, key_id: u32) -> Self {
         Self { account_id, key_id }
     }

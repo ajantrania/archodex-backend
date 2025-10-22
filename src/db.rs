@@ -277,16 +277,7 @@ pub(crate) async fn resources_db(
     Ok(DBConnection::Concurrent(db))
 }
 
-/// Creates production AppState with global database connections
-///
-/// This function initializes the application state for production use,
-/// setting up the global resources database factory and real authentication provider.
-/// The factory uses the same global connection pooling as before, ensuring zero performance overhead.
-///
-/// # Returns
-/// AppState configured for production with:
-/// - resources_db_factory: GlobalResourcesDbFactory for per-account DBs
-/// - auth_provider: RealAuthProvider for JWT/API key validation
+/// Creates production AppState with global database connections.
 #[instrument(err)]
 pub async fn create_production_state() -> Result<AppState> {
     let resources_db_factory = Arc::new(GlobalResourcesDbFactory);
@@ -312,7 +303,6 @@ pub(crate) async fn dashboard_auth_account(
 
     auth.validate_account_access(account_id).await?;
 
-    // Load account from injected accounts DB via factory
     let accounts_db = state
         .resources_db_factory
         .create_accounts_connection()
@@ -328,7 +318,6 @@ pub(crate) async fn dashboard_auth_account(
         not_found!("Account not found");
     };
 
-    // Get resources DB through factory
     #[cfg(feature = "archodex-com")]
     let resources_db = state
         .resources_db_factory
@@ -341,7 +330,6 @@ pub(crate) async fn dashboard_auth_account(
         .create_resources_connection(account_id, None)
         .await?;
 
-    // Create authenticated wrapper
     let authed = AuthedAccount {
         account,
         resources_db,
@@ -364,7 +352,6 @@ pub(crate) async fn report_api_key_account(
         .await
         .context("Authentication failed")?;
 
-    // Load account from accounts database
     let accounts_db = state
         .resources_db_factory
         .create_accounts_connection()
@@ -392,7 +379,6 @@ pub(crate) async fn report_api_key_account(
         .create_resources_connection(&auth_context.account_id, None)
         .await?;
 
-    // Validate API key exists and is not revoked
     let auth =
         ReportApiKeyAuth::from_credentials(auth_context.account_id.clone(), auth_context.key_id);
     auth.validate_account_access(&resources_db).await?;

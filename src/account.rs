@@ -123,10 +123,7 @@ impl Account {
         &self.salt
     }
 
-    /// Creates an Account for testing purposes
-    ///
-    /// This bypasses the normal account creation flow and allows tests to inject
-    /// account state directly. Available in unit tests and when test-support feature is enabled.
+    /// Creates an Account for testing, bypassing normal creation flow.
     #[cfg(any(test, feature = "test-support"))]
     pub fn new_for_testing(id: String, salt: Vec<u8>) -> Self {
         Self {
@@ -244,26 +241,9 @@ impl From<&Account> for surrealdb::sql::Thing {
     }
 }
 
-/// Wrapper for authenticated account with injected resources database
+/// Authenticated account with its resources database connection.
 ///
-/// This type separates the authentication concern from the domain Account type.
-/// After middleware authenticates a request and loads the account, it creates
-/// an AuthedAccount with both the account data and the appropriate resources
-/// database connection. This ensures handlers always have both pieces of information
-/// without needing to look up the database separately.
-///
-/// # Design Rationale
-/// - Keeps Account as a pure domain object (no database connection field)
-/// - No runtime Option unwrapping needed (resources_db is always present)
-/// - Clear ownership and intent at the type level
-/// - Compile-time guarantee that handlers have database access
-///
-/// # Usage
-/// ```ignore
-/// // Access fields directly:
-/// let account_id = &authed.account.id;
-/// let resources = authed.resources_db.select("resource").await?;
-/// ```
+/// Created by auth middleware after validating credentials and loading account data.
 #[derive(Clone)]
 pub struct AuthedAccount {
     pub account: Account,

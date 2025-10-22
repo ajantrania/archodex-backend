@@ -17,5 +17,8 @@ cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECH
 ## Code Style
 Rust 2024 edition (workspace configured for edition 2024): Follow standard conventions
 
+## Recent Changes
+- 001-rate-limits-we: Added Rust 2024 edition (workspace configured for edition 2024) + axum 0.7, surrealdb 2.3.7, aes-gcm 0.10.3, prost 0.13.5 (protobuf), tokio 1.47
+
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

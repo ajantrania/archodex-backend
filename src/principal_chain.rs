@@ -244,9 +244,9 @@ mod tests {
 
         // Convert to SurrealDB Value
         let surreal_value: Value = original.clone().into();
-        let surreal_object = match surreal_value {
-            Value::Object(obj) => obj,
-            _ => panic!("Expected Object, got {:?}", surreal_value),
+
+        let Value::Object(surreal_object) = surreal_value else {
+            panic!("Expected Object, got {surreal_value:?}")
         };
 
         // Convert back to PrincipalChainIdPart
@@ -270,9 +270,8 @@ mod tests {
 
         // Convert to SurrealDB Value
         let surreal_value: Value = original.clone().into();
-        let surreal_object = match surreal_value {
-            Value::Object(obj) => obj,
-            _ => panic!("Expected Object"),
+        let Value::Object(surreal_object) = surreal_value else {
+            panic!("Expected Object, got {surreal_value:?}")
         };
 
         // Convert back

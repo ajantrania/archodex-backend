@@ -159,7 +159,7 @@ async fn test_middleware_loads_account_from_injected_database() {
             .unwrap();
 
         assert!(
-            resources.len() > 0,
+            !resources.is_empty(),
             "Resources should be created in injected database"
         );
     }

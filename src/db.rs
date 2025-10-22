@@ -278,15 +278,15 @@ pub(crate) async fn resources_db(
 }
 
 /// Creates production `AppState` with global database connections.
-#[instrument(err)]
-pub async fn create_production_state() -> Result<AppState> {
+#[instrument]
+pub async fn create_production_state() -> AppState {
     let resources_db_factory = Arc::new(GlobalResourcesDbFactory);
     let auth_provider = Arc::new(crate::auth::RealAuthProvider);
 
-    Ok(AppState {
+    AppState {
         resources_db_factory,
         auth_provider,
-    })
+    }
 }
 
 #[instrument(err, skip_all)]

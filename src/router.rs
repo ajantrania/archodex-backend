@@ -140,13 +140,9 @@ pub fn create_router_with_state(state: AppState) -> Router {
 ///
 /// # Panics
 ///
-/// Will panic if:
-/// - `Env::archodex_domain()` is not a valid domain
-/// - Database initialization fails (though errors are typically returned, not panicked)
+/// Will panic if `Env::archodex_domain()` is not a valid domain.
 pub async fn router() -> Router {
-    let state = create_production_state()
-        .await
-        .expect("Failed to initialize production state");
+    let state = create_production_state().await;
 
     create_router_with_state(state)
 }

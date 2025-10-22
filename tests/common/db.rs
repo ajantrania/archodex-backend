@@ -150,7 +150,7 @@ pub async fn seed_test_api_key(db: &DBConnection, key_id: u32) {
             .query("CREATE $record CONTENT { created_at: time::now(), created_by: $created_by }")
             .bind((
                 "record",
-                sql::Thing::from(("report_api_key", sql::Id::Number(key_id as i64))),
+                sql::Thing::from(("report_api_key", sql::Id::Number(i64::from(key_id)))),
             ))
             .bind((
                 "created_by",

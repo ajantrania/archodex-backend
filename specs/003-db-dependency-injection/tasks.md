@@ -68,7 +68,7 @@
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Update middleware `report_api_key_account` in `src/db.rs` (lines 295-319)
+- [X] T008 [US1] Update middleware `report_api_key_account` in `src/db.rs` (lines 295-319)
   - Add `State(state): State<AppState>` parameter to function signature
   - Replace `accounts_db().await?` with `state.accounts_db` access
   - Use `state.resources_db_factory.create_connection()` instead of direct `resources_db()` call
@@ -76,47 +76,47 @@
   - Insert `AuthedAccount` into request extensions (not Account)
   - See research.md lines 790-825 for complete implementation
 
-- [ ] T009 [US1] Update middleware `dashboard_auth_account` in `src/db.rs` (lines 266-294)
+- [X] T009 [US1] Update middleware `dashboard_auth_account` in `src/db.rs` (lines 266-294)
   - Add `State(state): State<AppState>` parameter to function signature
   - Replace `accounts_db().await?` with `state.accounts_db` access
   - Use `state.resources_db_factory.create_connection()` for resources DB
   - Create `AuthedAccount` wrapper with account and resources_db
   - Insert `AuthedAccount` into request extensions
 
-- [ ] T010 [US1] Update router middleware registration in `src/router.rs`
+- [X] T010 [US1] Update router middleware registration in `src/router.rs`
   - Change `middleware::from_fn(report_api_key_account)` to `middleware::from_fn_with_state(state.clone(), report_api_key_account)`
   - Change `middleware::from_fn(dashboard_auth_account)` to `middleware::from_fn_with_state(state.clone(), dashboard_auth_account)`
   - Ensure correct layer order: Auth middleware outermost (runs first), then account loading
   - Add `.with_state(state)` to Router
   - See research.md lines 657-673 for correct vs wrong layer order
 
-- [ ] T011 [US1] Update all handler functions to extract `Extension<AuthedAccount>` instead of `Extension<Account>`
+- [X] T011 [US1] Update all handler functions to extract `Extension<AuthedAccount>` instead of `Extension<Account>`
   - Search for all occurrences of `Extension<Account>` in src/handlers/
   - Change to `Extension(authed): Extension<AuthedAccount>`
   - Access account via `authed.account` and resources DB via `authed.resources_db`
   - Approximately 10 handler functions affected (per plan.md line 24)
   - See research.md lines 875-888 for handler example
 
-- [ ] T012 [P] [US1] Create `tests/common/providers.rs` with TestResourcesDbFactory implementation
+- [X] T012 [P] [US1] Create `tests/common/providers.rs` with TestResourcesDbFactory implementation
   - Implement `TestResourcesDbFactory` struct that holds in-memory DBConnection
   - Implement `ResourcesDbFactory` trait for TestResourcesDbFactory
   - `create_connection()` returns clone of the test DB (ignores account_id/service_url)
   - Note: Must be in tests/ not src/ due to compilation unit boundaries (see research.md lines 717-743)
 
-- [ ] T013 [P] [US1] Create test helper `create_test_router` in `tests/common/mod.rs`
+- [X] T013 [P] [US1] Create test helper `create_test_router` in `tests/common/mod.rs`
   - Function signature: `create_test_router(accounts_db: DBConnection, resources_db: DBConnection) -> Router`
   - Create AppState with injected databases and TestResourcesDbFactory
   - Call `archodex_backend::router::create_router_with_state(state)`
   - Return Router for use in tests
   - See research.md lines 204-216 for implementation
 
-- [ ] T014 [P] [US1] Create test helper functions in `tests/common/mod.rs`
+- [X] T014 [P] [US1] Create test helper functions in `tests/common/mod.rs`
   - `create_test_accounts_db() -> DBConnection` - creates in-memory accounts DB
   - `create_test_resources_db() -> DBConnection` - creates in-memory resources DB
   - `seed_test_account(db: &DBConnection, account_id: &str) -> Account` - seeds account data
   - See quickstart.md lines 80-116 for implementation examples
 
-- [ ] T015 [US1] Write integration test in `tests/report_with_auth_test.rs`
+- [X] T015 [US1] Write integration test in `tests/report_with_auth_test.rs`
   - Test: successful report ingestion with database validation
   - Create in-memory databases using test helpers
   - Seed test account

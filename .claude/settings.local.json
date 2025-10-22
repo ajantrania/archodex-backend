@@ -20,7 +20,9 @@
       "Bash(cargo check:*)",
       "Bash(cargo:*)",
       "Bash(awk:*)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(git grep:*)",
+      "Bash(echo:*)"
     ],
     "deny": []
   }

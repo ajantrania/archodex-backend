@@ -7,9 +7,9 @@
 
 ## Summary
 
-This feature establishes a testing framework for the Archodex backend to enable automated testing of existing features and prepare for testing the rate limiting feature (001-rate-limits-we). The primary requirement is to evaluate testing approaches (unit tests with mocks vs integration tests vs hybrid), research SurrealDB testing viability, select the most pragmatic approach for the project's current stage, and validate it with **3 example tests** (revised from 2). The framework must balance maintainability, setup complexity, and confidence level while aligning with the Constitution's principle of avoiding over-engineering.
+This feature establishes a testing framework for the Archodex backend to enable automated testing of existing features and prepare for testing the rate limiting feature (001-rate-limits-we). The primary requirement is to evaluate testing approaches (unit tests with mocks vs integration tests vs hybrid), research SurrealDB testing viability, select the most pragmatic approach for the project's current stage, and validate it with **3 test validation approaches** (revised from 2 example tests). The framework must balance maintainability, setup complexity, and confidence level while aligning with the Constitution's principle of avoiding over-engineering.
 
-**Key Decision**: Use SurrealDB in-memory mode (`kv-mem`) for fast, isolated testing with zero infrastructure dependencies. Validate with 3 tests: (1) unit test for type conversions, (2) integration test with mock auth, and (3) integration test with full auth middleware chain.
+**Key Decision**: Use SurrealDB in-memory mode (`kv-mem`) for fast, isolated testing with zero infrastructure dependencies. Validate framework via 3 test validation approaches: (1) unit tests for pure business logic, (2) integration tests with mock authentication, and (3) integration tests with full authentication middleware.
 
 ## Technical Context
 
@@ -21,7 +21,7 @@ This feature establishes a testing framework for the Archodex backend to enable 
 **Project Type**: Single backend project with workspace members (server, lambda, migrator)
 **Performance Goals**: Test execution <60 seconds for integration tests, <30 seconds for unit tests, CI pipeline <5 minutes
 **Constraints**: Must work in GitHub Actions without excessive infrastructure, maintainable by stealth-stage team (avoid over-engineering), Docker availability in CI
-**Scale/Scope**: Initial framework with 2 example tests, expanding to ~20-30 tests for rate limiting feature, eventual target ~100-200 tests across all features
+**Scale/Scope**: Initial framework validated with 3 test validation approaches (~7-8 tests total), expanding to ~20-30 tests for rate limiting feature, eventual target ~100-200 tests across all features
 
 ## Constitution Check
 

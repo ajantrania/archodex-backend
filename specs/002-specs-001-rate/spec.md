@@ -43,21 +43,22 @@ Development team needs to establish testing framework infrastructure by adding s
 
 ---
 
-### User Story 3 - Validate Framework with Existing Feature Tests (Priority: P1)
+### User Story 3 - Validate Framework with Test Validation Approaches (Priority: P1)
 
-Development team needs to validate chosen testing approach by writing 2 example tests for existing features (resource ingestion and API key generation) to verify the approach works and is maintainable.
+Development team needs to validate chosen testing approach by implementing 3 distinct test validation approaches to verify the framework works and is maintainable: (1) unit tests for pure logic, (2) integration tests with mock authentication, and (3) integration tests with full authentication middleware.
 
-**Why this priority**: Writing tests for existing features proves the chosen approach is viable before using it for new development. Provides concrete examples showing whether approach is actually maintainable.
+**Why this priority**: Demonstrating multiple test validation approaches proves the framework is viable for different testing scenarios before using it for new development. Provides concrete examples showing the framework is actually maintainable across unit and integration testing patterns.
 
-**Independent Test**: Can be fully tested by implementing 2 complete example tests that pass consistently and are straightforward to write/debug.
+**Independent Test**: Can be fully tested by implementing 3 test validation approaches that pass consistently and are straightforward to write/debug.
 
 **Acceptance Scenarios**:
 
-1. **Given** resource ingestion test is written using chosen approach, **When** test validates ingestion behavior (method depends on approach: verify database state, verify mocked calls, or verify function outputs), **Then** test passes and clearly demonstrates ingestion works correctly
-2. **Given** API key generation test is written, **When** test generates key with encryption and protobuf encoding, **Then** test validates key can be decoded and tamper detection works correctly
-3. **Given** both example tests are implemented, **When** developer runs `cargo test` locally, **Then** both tests pass within acceptable time for chosen approach (under 60 seconds)
-4. **Given** tests are committed to repository, **When** GitHub Actions CI runs via `cargo test`, **Then** tests execute successfully without excessive setup complexity
-5. **Given** example tests serve as documentation, **When** developer needs to write new test, **Then** they can reference example test structure and patterns and write tests without getting blocked by setup complexity
+1. **Given** unit test validation approach is implemented, **When** tests validate pure business logic (e.g., type conversions, data transformations) without external dependencies, **Then** tests pass quickly (<1 second) and demonstrate unit testing pattern works correctly
+2. **Given** integration test with mock authentication is implemented, **When** test validates HTTP request/response flow with authentication bypassed via Extension injection, **Then** test passes and demonstrates integration testing with simplified auth works correctly
+3. **Given** integration test with full authentication middleware is implemented, **When** test validates complete request flow including auth middleware → account loading → handler execution → database operations, **Then** test passes and demonstrates full-stack integration testing works correctly
+4. **Given** all 3 test validation approaches are implemented, **When** developer runs `cargo test` locally, **Then** all tests pass within acceptable time for chosen approach (under 30 seconds total)
+5. **Given** tests are committed to repository, **When** GitHub Actions CI runs via `cargo test`, **Then** tests execute successfully without excessive setup complexity
+6. **Given** test validation approaches serve as documentation, **When** developer needs to write new test, **Then** they can reference appropriate test validation approach structure and patterns and write tests without getting blocked by setup complexity
 
 ---
 
@@ -81,16 +82,16 @@ Development team needs to configure GitHub Actions CI to automatically run tests
 
 ### Edge Cases
 
-- What happens when framework evaluation identifies no clearly superior option (should document risks of each choice and make pragmatic decision based on project stage)?
-- How does team handle stakeholder disagreement on framework choice (should present data-driven evaluation and allow informed discussion)?
-- What happens when full integration tests with real SurrealDB are too complex to maintain (should evaluate simpler alternatives like in-memory database or mocks)?
-- What happens when SurrealDB container (DynamoDB-backed) is incompatible with testcontainers or too slow in CI (should evaluate in-memory SurrealDB or mocking approach)?
-- What happens when in-memory SurrealDB has different behavior than production DynamoDB-backed version (should document known differences and accept tradeoff for simplicity)?
-- How does team decide between unit tests with mocks vs integration tests with database (should evaluate based on maintenance burden, debugging ease, and confidence level needed)?
-- What happens when selected testing approach proves too cumbersome after implementation (should be prepared to pivot to simpler approach)?
-- What happens when test setup is so complex that developers avoid writing tests (violates Constitution principles - should choose simpler approach)?
-- What happens when CI environment has insufficient resources for selected testing approach (should fail early with clear error or choose lighter-weight approach)?
-- How does system handle test flakiness due to database state or timing issues (should choose deterministic approach or accept tradeoff)?
+- **Framework evaluation with no clearly superior option**: Team MUST document risks of each choice and make pragmatic decision based on project stage within 4-hour time limit. Default to simplest viable option per Constitution's Development Stage Context.
+- **Stakeholder disagreement on framework choice**: Team MUST present data-driven evaluation against defined criteria and facilitate informed discussion. Final decision prioritizes maintainability and simplicity.
+- **Full integration tests too complex to maintain**: Team MUST pivot to simpler alternatives (in-memory database or targeted mocks). Framework complexity that prevents developer adoption violates Constitution principles.
+- **SurrealDB container incompatible or too slow in CI**: Team MUST use in-memory SurrealDB mode (`kv-mem`) or evaluate mocking approach. CI execution time must remain under 5 minutes total.
+- **In-memory SurrealDB behavioral differences from production**: Team MUST document known differences in tests/common/README.md and accept tradeoff for simplicity. Critical differences may require selective container-based tests.
+- **Unit tests vs integration tests decision**: Team MUST evaluate based on maintenance burden (Constitution priority), debugging ease, and confidence level needed. Hybrid approach (unit tests for logic, integration tests for critical paths) is acceptable.
+- **Selected testing approach proves too cumbersome**: Team MUST be prepared to pivot to simpler approach within 2-3 day validation phase. Early feedback and willingness to change prevents sunk cost fallacy.
+- **Test setup complexity prevents developer adoption**: This violates Constitution Development Stage Context principle. Team MUST immediately simplify approach or provide better abstractions through helper functions.
+- **CI environment has insufficient resources**: Tests MUST fail early with clear error message indicating resource constraints. Team evaluates lighter-weight approach or optimizes test execution (serial vs parallel).
+- **Test flakiness due to database state or timing**: Framework MUST use deterministic test data and in-memory database isolation. Timing-based assertions are prohibited. Each test gets fresh database instance to prevent state contamination.
 
 ## Requirements *(mandatory)*
 
@@ -108,37 +109,37 @@ Development team needs to configure GitHub Actions CI to automatically run tests
 - **FR-007**: Selected testing approach is maintainable at current project stage (minimal setup, simple CI, straightforward debugging per Constitution principles)
 - **FR-008**: Testing framework MUST work in GitHub Actions CI without excessive infrastructure requirements
 - **FR-009**: Selected testing tooling dependencies MUST be added to `[dev-dependencies]` section of Cargo.toml
-- **FR-010**: Test organization MUST follow Rust conventions with unit tests in `#[cfg(test)] mod tests` and integration tests in `tests/` directory (if integration tests are chosen)
+- **FR-010**: Test organization MUST follow Rust conventions: unit tests in `#[cfg(test)] mod tests` within production code files, integration tests in `tests/` directory, shared test helpers in `tests/common/` module
 
 **Test Helpers and Reusability**:
-- **FR-011**: Test helpers MUST be organized in `tests/common/` module for shared fixtures and utilities (if applicable to chosen approach)
-- **FR-012**: Test helpers MUST provide reusable functions appropriate to chosen testing approach (database setup, mocks, or test data builders)
+- **FR-012**: Test helpers MUST provide reusable functions appropriate to chosen testing approach (database setup, test data builders)
 - **FR-013**: Test helpers MUST provide fixture generators for common test data (reports, resources, events, accounts)
-- **FR-014**: Test helpers MUST reduce boilerplate code compared to inline test setup
+- **FR-014**: Test helpers MUST reduce boilerplate code by at least 70% compared to inline test setup (per SC-015)
 
-**Framework Validation**:
-- **FR-015**: Chosen approach MUST demonstrate viability by implementing 2 example tests for existing features
-- **FR-016**: Example test 1 MUST validate resource ingestion behavior appropriate to chosen approach (e.g., function logic with mocked DB, or end-to-end with test database)
-- **FR-017**: Example test 2 MUST validate Report API key generation logic (encryption, protobuf encoding, tamper detection) - can use mocked or real crypto functions
-- **FR-018**: Example tests MUST use test helpers to demonstrate reusability and reduce boilerplate
-- **FR-019**: Example tests MUST be straightforward to write, run, and debug without excessive setup steps
+**Test Validation Approaches** (Framework validation via 3 distinct approaches):
+- **FR-015**: Framework MUST demonstrate viability by implementing 3 test validation approaches as specified in FR-015.1, FR-015.2, and FR-015.3 below
+- **FR-015.1**: Test validation approach 1 (unit) MUST validate pure business logic without external dependencies (e.g., type conversions, data transformations) using inline `#[cfg(test)]` tests in production code files
+- **FR-015.2**: Test validation approach 2 (integration with mock auth) MUST validate HTTP request/response flow with authentication bypassed via test router or Extension injection
+- **FR-015.3**: Test validation approach 3 (integration with full auth) MUST validate complete request flow including auth middleware → account loading → handler execution → database operations, with explicit assertions for: (1) HTTP 200 status code, (2) account record exists in database with correct ID, (3) report resources stored in database with correct count matching request, (4) events stored in database with valid timestamps
+- **FR-019**: All test validation approaches MUST use test helpers (where applicable) to demonstrate reusability and reduce boilerplate
+- **FR-020**: All test validation approaches MUST be straightforward to write, run, and debug without excessive setup steps
 
 **Documentation**:
-- **FR-020**: Framework documentation MUST be created in `tests/common/README.md` with patterns and examples
-- **FR-021**: Documentation MUST explain how to write new tests using established patterns
-- **FR-022**: Documentation MUST include examples appropriate to chosen approach (database setup, mock setup, or test data builders) and assertions
+- **FR-021**: Framework documentation MUST be created in `tests/common/README.md` including: (1) overview of testing infrastructure, (2) database setup helper functions with examples, (3) test data fixture patterns with examples, (4) test router patterns for auth bypass, (5) three test validation approach patterns (unit, integration mock, integration full), (6) troubleshooting section with common errors and debugging tips
+- **FR-022**: Documentation MUST explain how to write new tests following established patterns, enabling new developers to write and run their first test within 15 minutes
+- **FR-023**: Documentation MUST include concrete code examples for database setup, test data generation, and assertions appropriate to each test validation approach
 
 **CI Integration**:
-- **FR-023**: GitHub Actions workflow MUST run `cargo test` automatically on every push to any branch
-- **FR-024**: GitHub Actions MUST block pull request merges if any tests fail
-- **FR-025**: GitHub Actions setup MUST be straightforward with minimal infrastructure requirements (complexity acceptable for project stage)
-- **FR-030**: Tests SHOULD be runnable locally via ACT to match GitHub Actions environment (desirable but not mandatory)
+- **FR-024**: GitHub Actions workflow MUST run `cargo test` automatically on every push to any branch
+- **FR-025**: GitHub Actions MUST block pull request merges if any tests fail
+- **FR-026**: GitHub Actions setup MUST be straightforward with minimal infrastructure requirements (complexity acceptable for project stage)
+- **FR-027**: Tests SHOULD be runnable locally via ACT to match GitHub Actions environment (desirable but not mandatory)
 
 **Framework Quality**:
-- **FR-026**: Framework MUST provide clear error messages when setup fails (e.g., missing dependencies, configuration errors)
-- **FR-027**: Tests MUST be deterministic and produce consistent results across multiple runs
-- **FR-028**: Framework MUST support chosen testing approach (unit tests, integration tests, or hybrid) effectively
-- **FR-029**: If approach uses test databases or resources, cleanup MUST occur automatically (tests never deploy against real backends)
+- **FR-028**: Framework MUST provide clear error messages when setup fails (e.g., missing dependencies, configuration errors)
+- **FR-029**: Tests MUST be deterministic and produce identical results across 10 consecutive executions
+- **FR-030**: Framework MUST support chosen testing approach (unit tests, integration tests, or hybrid) effectively
+- **FR-031**: If approach uses test databases or resources, cleanup MUST occur automatically (tests never deploy against real backends)
 
 ### Key Entities *(include if feature involves data)*
 
@@ -163,12 +164,12 @@ Development team needs to configure GitHub Actions CI to automatically run tests
 
 ### Framework Setup and Viability
 
-- **SC-005**: Selected framework dependencies are successfully added to Cargo.toml and compile without errors
+- **SC-005**: Selected framework dependencies are successfully added to Cargo.toml and compile without errors via `cargo build --tests`
 - **SC-006**: Test helper modules (`tests/common/`) are created with reusable functions appropriate to chosen approach within 2 hours
 - **SC-007**: Test setup (database, mocks, or data builders) is straightforward for developers to use and understand
 - **SC-008**: Tests have appropriate isolation based on chosen approach (no shared state for integration tests, clean mocks for unit tests)
-- **SC-009**: 2 example tests (resource ingestion + API key) are implemented and pass consistently using chosen approach
-- **SC-010**: Testing framework setup (evaluation + dependencies + helpers + examples) completes within 2-3 days total
+- **SC-009**: 3 test validation approaches (unit, integration with mock auth, integration with full auth) are implemented and pass consistently
+- **SC-010**: Testing framework setup (evaluation + dependencies + helpers + 3 test validation approaches) completes within 2-3 days total
 - **SC-011**: Developers can write and run new tests without excessive setup complexity (aligns with Constitution principles)
 
 ### Test Execution Performance
@@ -177,7 +178,7 @@ Development team needs to configure GitHub Actions CI to automatically run tests
 |----------|-------------|-----------|
 | Single unit test | < 1 second | Fast feedback for TDD workflow |
 | Single integration test | < 5 seconds | Acceptable for database operations (in-memory) |
-| Full local test suite | < 30 seconds | Current stage (2 example tests), may increase to 60s as suite grows |
+| Full local test suite | < 30 seconds | Current stage (3 test validation approaches: ~7-8 tests total), may increase to 60s as suite grows |
 | Full CI pipeline | < 3-5 minutes | From push to result, including checkout, build, test, clippy |
 
 - **SC-012**: Developer can run `cargo test` locally and all tests pass within target times above
@@ -195,9 +196,9 @@ Development team needs to configure GitHub Actions CI to automatically run tests
 
 ### Documentation and Knowledge Transfer
 
-- **SC-021**: `tests/common/README.md` documentation is created with patterns, examples, and usage instructions
-- **SC-022**: Documentation enables new developer to write their first test following patterns within 15 minutes
-- **SC-023**: Example tests serve as reference implementation demonstrating helper usage and best practices
+- **SC-021**: `tests/common/README.md` documentation is created with patterns, examples, and usage instructions covering all 3 test validation approaches
+- **SC-022**: Documentation enables new developer to write their first test following established patterns within 15 minutes (measured by having developer read README and write passing test)
+- **SC-023**: Test validation approaches serve as reference implementations demonstrating helper usage and best practices for unit and integration testing patterns
 
 ### CI Integration
 
@@ -211,16 +212,16 @@ Development team needs to configure GitHub Actions CI to automatically run tests
 - CI environment is GitHub Actions (ACT compatibility desirable but not required)
 - Tests never run against deployed production or staging backends (only local ephemeral databases or mocks with point-in-time restoration each run)
 - Test execution times per performance table above are acceptable for developer workflow
-- Builder functions are preferred over JSON fixtures for test data generation (more flexible and type-safe)
-- Existing codebase has report ingestion and API key generation features that can be used for example tests
+- Factory functions are preferred over JSON fixtures for test data generation (more flexible and type-safe)
+- Existing codebase has business logic suitable for test validation approaches (type conversions for unit tests, HTTP endpoints for integration tests)
 - All tests must be deterministic and repeatable (no flaky tests due to timing or network issues)
 - Test data uses realistic values but can be simplified for readability (e.g., predictable IDs like "res1", "res2")
-- Framework validation with 2 example tests is sufficient proof of viability before broader adoption
-- Rate limiting feature tests will be written separately in feature 001-rate-limits-we using selected approach
+- Framework validation with 3 test validation approaches is sufficient proof of viability before broader adoption
+- Rate limiting feature tests will be written separately in feature 001-rate-limits-we using testing framework established here
 - Team has capacity to spend 4-8 hours evaluating testing approaches and SurrealDB options before implementation
 - Framework evaluation document (testing-framework-proposal.md) contains sufficient detail for informed decision-making
 - Archodex SurrealDB fork (DynamoDB-backed) may or may not be testable depending on research outcomes
-- Mocking SurrealDB interactions is a viable and acceptable option if it reduces complexity significantly
+- In-memory SurrealDB (`kv-mem`) is selected approach for simplicity, accepting potential behavioral differences from production
 
 ## Dependencies *(optional)*
 
@@ -229,16 +230,12 @@ Development team needs to configure GitHub Actions CI to automatically run tests
 - **Stakeholder availability**: For reviewing and approving approach/framework selection
 - **Archodex SurrealDB fork**: Located at https://github.com/Archodex/surrealdb (local: `/Users/ajantrania/code/archodex/surrealdb`) - DynamoDB-backed version used in production
 
-**Post-Selection** (implementation dependencies vary by chosen approach):
-- **Potential option - mockall or similar**: Mocking library for database layer (if mocking approach chosen) - viable first-class option
-- **Potential option - testcontainers**: Library for ephemeral Docker containers (if containerized integration tests chosen)
-- **Potential option - rstest**: Parameterized testing and test fixtures (if selected)
-- **Potential option - tokio-test**: Testing utilities for async Tokio code (likely needed regardless)
-- **Potential option - axum-test**: HTTP request/response testing for Axum framework (if selected)
-- **GitHub Actions**: CI environment (ACT for local testing)
-- **SurrealDB version/mode**: Depends on approach (Archodex fork with DDB, in-memory, containerized, or mocked)
-- **Existing report ingestion feature**: Required for example test 1
-- **Existing API key generation feature**: Required for example test 2
+**Post-Selection** (implementation dependencies for selected approach):
+- **tower crate**: For `tower::ServiceExt::oneshot()` used in integration test request/response testing (already in workspace dependencies)
+- **GitHub Actions**: CI environment (ACT for local testing is optional)
+- **SurrealDB in-memory mode**: `Surreal::new::<Mem>()` for isolated test database instances
+- **Existing business logic for unit tests**: Type conversion logic (e.g., PrincipalChainIdPart) in production code
+- **Existing HTTP endpoints for integration tests**: Health endpoint and report endpoint with authentication middleware
 
 ## Out of Scope *(optional)*
 
@@ -261,10 +258,10 @@ Development team needs to configure GitHub Actions CI to automatically run tests
 - **Test execution time**: Integration tests may be slower than desired depending on framework choice. Mitigation: Include test speed as evaluation criterion and monitor times during validation.
 - **Resource usage**: Multiple concurrent tests may exhaust system resources depending on framework. Mitigation: Evaluate isolation approach as part of framework selection and run tests serially initially if needed.
 - **SurrealDB version mismatch**: Test database version may drift from production version. Mitigation: Pin database version in test code regardless of framework choice.
-- **Test data complexity**: Fixture generation may become complex for realistic scenarios. Mitigation: Start with simple builder functions for 2 example tests, refactor if patterns emerge.
+- **Test data complexity**: Fixture generation may become complex for realistic scenarios. Mitigation: Start with simple factory functions for 3 test validation approaches, refactor if patterns emerge.
 - **Flaky tests**: Network or timing issues may cause intermittent failures. Mitigation: Use deterministic test data and avoid time-based assertions.
 - **Framework proves inadequate during validation**: Selected framework may not meet needs after implementation. Mitigation: Keep 2-3 day validation phase focused, get quick feedback, and be prepared to pivot if necessary.
-- **Existing features may lack testability**: Report ingestion or API key features may be difficult to test. Mitigation: Refactor for testability if needed as part of framework setup.
+- **Existing features may lack testability**: Business logic or endpoints may be difficult to test. Mitigation: Refactor for testability if needed as part of framework setup, or add `#[cfg(test)]` constructors for test-only bypass.
 
 ## Timeline *(optional)*
 
@@ -286,44 +283,66 @@ Development team needs to configure GitHub Actions CI to automatically run tests
 4. Document tradeoffs and selection rationale (e.g., "chose in-memory for simplicity, accepting behavioral differences")
 5. Present to stakeholders for approval before proceeding to implementation
 
-### Phase 1: Framework Setup + Validation (2-3 days)
+### Phase 1-5: Framework Implementation and Validation (2-3 days)
 
-**Day 1 (4-6 hours)**:
-1. Add selected framework dependencies to `[dev-dependencies]` in Cargo.toml
-2. Create `tests/common/` directory structure
-3. Implement `tests/common/db.rs` with database setup helpers (names depend on framework choice)
-4. Implement `tests/common/fixtures.rs` with test data builders
-5. Write integration test for basic resource ingestion (3 resources)
-6. Write integration test for Report API key generation with crypto validation
-7. Verify `cargo test` passes locally with both tests green
+**Phase 1 - Setup** (15-30 minutes):
+1. Add minimal dev-dependencies to Cargo.toml (tower for oneshot)
+2. Create `tests/` and `tests/common/` directory structure
 
-**Day 2 (2-3 hours)**:
-8. Create `tests/common/README.md` documenting patterns, helpers, and examples
-9. Add or update CI configuration file (`.github/workflows/test.yml` or AWS CodeBuild config)
-10. Push to repository and verify CI runs tests successfully with selected framework
-11. Verify CI blocks merges when tests fail (test with intentional failure)
-12. Present completed framework for final approval
+**Phase 2 - Foundational Infrastructure** (2-3 hours):
+3. Implement core test helper modules (`tests/common/mod.rs`, `db.rs`, `fixtures.rs`)
+4. Create database setup functions (in-memory SurrealDB with migrations)
+5. Create test data factory functions (accounts, resources, events, reports)
 
-### Phase 2: Review and Approval (flexible timeline)
+**Phase 3 - Test Validation Approach 1: Unit Tests** (1-2 hours):
+6. Implement unit tests for business logic (e.g., PrincipalChainIdPart type conversions)
+7. Add `#[cfg(test)] mod tests` in production code files
+8. Verify unit tests pass quickly (<1 second execution)
+
+**Phase 4 - Test Validation Approach 2: Integration with Mock Auth** (1-2 hours):
+9. Create test router infrastructure (`tests/common/test_router.rs`)
+10. Implement integration test with authentication bypassed (health endpoint)
+11. Verify integration test passes (<5 seconds execution)
+
+**Phase 5 - Test Validation Approach 3: Integration with Full Auth** (2-3 hours):
+12. Add `#[cfg(test)]` constructors to production code for test-only auth bypass
+13. Implement integration tests with full authentication middleware (report endpoint)
+14. Verify full-stack integration tests pass (<10 seconds execution)
+15. **STOP: Await user approval before proceeding to Phase 6 (CI/Documentation)**
+
+**Phase 6 - CI Integration and Documentation** (3-4 hours) - **REQUIRES USER APPROVAL**:
+16. Create or update GitHub Actions workflow (`.github/workflows/test.yml`)
+17. Configure workflow to run cargo test, clippy, and fmt checks
+18. Verify CI blocks merges when tests fail
+19. Create comprehensive `tests/common/README.md` documentation
+
+**Phase 7 - Polish and Validation** (1-2 hours) - **REQUIRES USER APPROVAL**:
+20. Run cargo fmt and clippy on all test code
+21. Validate determinism (10 consecutive test runs)
+22. Verify test isolation (parallel vs serial execution)
+23. Update CLAUDE.md with testing framework information
+
+### Phase 6-7: Review and Approval (flexible timeline)
 
 **Review criteria**:
 - Framework setup is straightforward and well-documented
-- Example tests are readable and maintainable
+- All 3 test validation approaches are readable and maintainable
 - Test helpers reduce boilerplate effectively
-- Local test execution works smoothly (`cargo test`)
-- CI integration functions correctly
+- Local test execution works smoothly (`cargo test` completes in <30 seconds)
+- CI integration functions correctly (Phases 6-7 only)
 - Framework is ready for broader adoption
 
 **Outcomes**:
-- If approved: Framework becomes standard for all future testing (including feature 001-rate-limits-we)
+- If approved after Phase 5: Framework is functional and ready for use (CI/docs are optional enhancements)
+- If approved after Phase 7: Framework is production-ready with full CI automation and comprehensive documentation
 - If changes needed: Iterate based on feedback and re-submit
 - If rejected: Evaluate alternative testing approaches
 
-### Phase 3: Adoption (outside scope of this feature)
+### Post-Implementation: Adoption (outside scope of this feature)
 
-Framework will be used for writing tests in other features:
-- Feature 001-rate-limits-we will use this framework for plan and rate limit tests
-- Future backend features will follow established patterns
+Testing framework established here will be used for writing tests in other features:
+- Feature 001-rate-limits-we will use this testing framework for plan and rate limit tests
+- Future backend features will follow established test validation approach patterns
 - Framework may be enhanced based on real-world usage feedback
 
 ## Open Questions for Discussion *(optional)*

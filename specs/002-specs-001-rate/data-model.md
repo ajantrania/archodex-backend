@@ -411,60 +411,101 @@ TestAccount
 
 ## Example Usage Patterns
 
-### Pattern 1: Simple Test with Database
+### Pattern 1: Unit Test (Inline in Source)
 
 ```rust
-#[tokio::test]
-async fn test_create_account() {
-    let db = create_test_db_with_migrations().await;
+// In src/principal_chain.rs
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let account = create_test_account("test123", "Test Account");
+    #[test]
+    fn test_principal_chain_id_part_round_trip() {
+        let resource_id = ResourceId::from(vec![
+            ("partition".to_string(), "aws".to_string()),
+        ]);
 
-    db.query(format!("CREATE account:{} CONTENT {{ name: '{}' }}", account.id, account.name))
-        .await
-        .unwrap();
+        let original = PrincipalChainIdPart {
+            id: resource_id.clone(),
+            event: Some("s3:PutObject".to_string()),
+        };
 
-    let result: Option<TestAccount> = db.select(("account", &account.id))
-        .await
-        .unwrap();
+        let surreal_value: Value = original.clone().into();
+        let surreal_object = match surreal_value {
+            Value::Object(obj) => obj,
+            _ => panic!("Expected Object"),
+        };
 
-    assert!(result.is_some());
+        let parsed = PrincipalChainIdPart::try_from(surreal_object).unwrap();
+
+        assert_eq!(parsed.id, original.id);
+        assert_eq!(parsed.event, original.event);
+    }
 }
 ```
 
-### Pattern 2: Test with Generated Report
+### Pattern 2: Integration Test (Mock Auth)
 
 ```rust
+// tests/health_check_test.rs
+mod common;
+
+use axum::{body::Body, http::{Request, StatusCode}};
+use tower::ServiceExt;
+
 #[tokio::test]
-async fn test_ingest_report() {
-    let (db, account) = create_test_db_with_account("test_acc").await;
+async fn test_health_endpoint() {
+    let app = common::create_test_router();
 
-    let report = create_test_report(3, 0); // 3 resources, 0 events
+    let response = app
+        .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
 
-    let result = ingest_report(&account.id, report, &db).await;
-
-    assert!(result.is_ok());
-
-    let resources: Vec<Resource> = db.select("resource").await.unwrap();
-    assert_eq!(resources.len(), 3);
+    assert_eq!(response.status(), StatusCode::OK);
 }
 ```
 
-### Pattern 3: Test with Builder Pattern
+### Pattern 3: Integration Test (Real Auth Middleware)
 
 ```rust
+// tests/report_with_auth_test.rs
+mod common;
+
+use axum::{body::Body, http::{Request, StatusCode}};
+use tower::ServiceExt;
+
 #[tokio::test]
-async fn test_complex_report() {
-    let (db, account) = create_test_db_with_account("test_acc").await;
+async fn test_report_with_full_auth() {
+    common::setup_test_env();
 
-    let report = TestReportBuilder::new()
-        .with_resources(10)
-        .with_events(50)
-        .build();
+    let (db, account) = common::create_test_db_with_account("test_account").await;
 
-    let result = ingest_report(&account.id, report, &db).await;
+    let accounts_db = common::get_test_accounts_db().await;
+    accounts_db.create(("account", &account.id))
+        .content(&account)
+        .await
+        .unwrap();
 
-    assert!(result.is_ok());
+    let app = crate::router::router(); // Production router!
+
+    let report_json = common::create_test_report_request(3, 5);
+    let auth_token = common::create_test_auth_token(&account.id);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/report")
+                .header("content-type", "application/json")
+                .header("authorization", auth_token)
+                .body(Body::from(serde_json::to_string(&report_json).unwrap()))
+                .unwrap()
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
 }
 ```
 

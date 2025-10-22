@@ -307,28 +307,45 @@ async fn test_2() {
 
 ## Example Tests
 
-### Example 1: Resource Ingestion Test
+### Example 1: Unit Test (PrincipalChainIdPart)
 
-**Location**: `tests/report_ingestion_test.rs`
+**Location**: `src/principal_chain.rs` (inline `#[cfg(test)]` module)
 
-**What it tests**: Validates that report ingestion correctly stores resources in database
-
-**Run it**:
-```bash
-cargo test test_report_ingests_resources_correctly
-```
-
-### Example 2: API Key Test
-
-**Location**: `tests/report_api_key_test.rs`
-
-**What it tests**: Validates API key encryption, decryption, and tamper detection
+**What it tests**: Validates type conversions (TryFrom/From) for SurrealDB serialization
 
 **Run it**:
 ```bash
-cargo test test_api_key_roundtrip
-cargo test test_tamper_detection
+cargo test test_principal_chain_id_part_round_trip
 ```
+
+**Why this test**: Tests pure logic with no external dependencies (no DB, no AWS, no auth). Perfect idiomatic Rust unit test.
+
+### Example 2: Integration Test (Health Check)
+
+**Location**: `tests/health_check_test.rs`
+
+**What it tests**: Validates HTTP endpoint handling (auth bypassed for simplicity)
+
+**Run it**:
+```bash
+cargo test test_health_endpoint
+```
+
+**Why this test**: Demonstrates integration testing pattern with test routers that bypass authentication.
+
+### Example 3: Integration Test (Report with Full Auth)
+
+**Location**: `tests/report_with_auth_test.rs`
+
+**What it tests**: Validates COMPLETE authentication middleware chain + report ingestion
+
+**Run it**:
+```bash
+cargo test test_report_with_full_auth
+cargo test test_report_endpoint_rejects_invalid_auth
+```
+
+**Why this test**: Uses production router to test actual auth middleware execution, extension injection, and full request flow.
 
 ---
 

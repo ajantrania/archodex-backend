@@ -396,83 +396,741 @@ Based on research findings:
 
 ---
 
-## 6. Example Test Implementation Preview
+## 6. Revised Example Test Implementation (Based on Implementation Feedback)
 
-### Example Test 1: Resource Ingestion (Integration)
+### Example Test 1: Unit Test for PrincipalChainIdPart Conversion (Pure Logic)
+
+**File**: `src/principal_chain.rs` (inline `#[cfg(test)]` module)
+
+**Why This Test**:
+- ✅ Tests pure logic (no DB, no AWS, no external dependencies)
+- ✅ Tests existing `TryFrom<surrealdb::sql::Object>` and `From` trait implementations
+- ✅ Can access private types and methods
+- ✅ Fast (<1ms execution time)
+- ✅ Perfect idiomatic Rust unit test pattern
 
 ```rust
-// tests/report_ingestion_test.rs
+// In src/principal_chain.rs (at bottom of file)
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use surrealdb::sql::{Object, Value, Strand, Array};
+
+    #[test]
+    fn test_principal_chain_id_part_round_trip() {
+        // Create test ResourceId (mocking without external dependencies)
+        let resource_id = ResourceId::from(vec![
+            ("partition".to_string(), "aws".to_string()),
+            ("account".to_string(), "123456789012".to_string()),
+        ]);
+
+        // Create PrincipalChainIdPart
+        let original = PrincipalChainIdPart {
+            id: resource_id.clone(),
+            event: Some("s3:PutObject".to_string()),
+        };
+
+        // Convert to SurrealDB Object
+        let surreal_value: Value = original.clone().into();
+        let surreal_object = match surreal_value {
+            Value::Object(obj) => obj,
+            _ => panic!("Expected Object"),
+        };
+
+        // Convert back to PrincipalChainIdPart
+        let parsed = PrincipalChainIdPart::try_from(surreal_object).unwrap();
+
+        // Verify round-trip correctness
+        assert_eq!(parsed.id, original.id);
+        assert_eq!(parsed.event, original.event);
+    }
+
+    #[test]
+    fn test_principal_chain_id_part_without_event() {
+        let resource_id = ResourceId::from(vec![
+            ("partition".to_string(), "aws".to_string()),
+        ]);
+
+        let original = PrincipalChainIdPart {
+            id: resource_id.clone(),
+            event: None,
+        };
+
+        let surreal_value: Value = original.clone().into();
+        let surreal_object = match surreal_value {
+            Value::Object(obj) => obj,
+            _ => panic!("Expected Object"),
+        };
+
+        let parsed = PrincipalChainIdPart::try_from(surreal_object).unwrap();
+
+        assert_eq!(parsed.id, original.id);
+        assert_eq!(parsed.event, None);
+    }
+
+    #[test]
+    fn test_principal_chain_id_part_invalid_object_missing_id() {
+        let mut obj = Object::default();
+        obj.insert("event".to_string(), Value::Strand(Strand::from("test")));
+
+        let result = PrincipalChainIdPart::try_from(obj);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("missing the `id` key"));
+    }
+
+    #[test]
+    fn test_principal_chain_id_part_invalid_event_type() {
+        let resource_id = ResourceId::from(vec![("partition".to_string(), "aws".to_string())]);
+
+        let mut obj = Object::default();
+        obj.insert("id".to_string(), Value::from(resource_id));
+        obj.insert("event".to_string(), Value::from(123)); // Invalid: should be string
+
+        let result = PrincipalChainIdPart::try_from(obj);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid `event` value"));
+    }
+}
+```
+
+**Benefits**:
+- No external dependencies (no DB connection, no AWS credentials)
+- Tests real production code (`TryFrom`, `From` implementations)
+- Validates error handling (missing fields, invalid types)
+- Fast feedback loop for TDD
+
+---
+
+### Example Test 2: Integration Test with Auth Bypass (HTTP → DB)
+
+**File**: `tests/health_check_integration_test.rs` (start simple, then escalate)
+
+**Authentication Strategy**: Use test-specific router without auth middleware
+
+```rust
+// tests/common/test_router.rs
+use axum::{Router, routing::get};
+
+/// Creates router for testing WITHOUT authentication middleware
+pub fn create_test_router() -> Router {
+    Router::new()
+        .route("/health", get(|| async { "Ok" }))
+    // Add more routes as needed for testing, bypassing DashboardAuth/ReportApiKeyAuth
+}
+```
+
+**Simple Integration Test** (no auth needed):
+
+```rust
+// tests/health_check_integration_test.rs
 mod common;
 
-use common::{create_test_db, create_test_report};
+use axum::{body::Body, http::{Request, StatusCode}};
+use tower::ServiceExt; // oneshot
 
 #[tokio::test]
-async fn test_report_ingests_resources_correctly() {
-    let db = create_test_db().await;
+async fn test_health_endpoint() {
+    let app = common::create_test_router();
 
-    // Run migrations
-    migrator::migrate_accounts_database(&db).await.unwrap();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap()
+        )
+        .await
+        .unwrap();
 
-    // Create test account
-    db.query("CREATE account:test_acc CONTENT { name: 'Test' }")
-        .await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
 
-    // Generate test report with 3 resources
-    let report = create_test_report(3, 0);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"Ok");
+}
+```
 
-    // Ingest report
-    let result = ingest_report("test_acc", report, &db).await;
-    assert!(result.is_ok());
+**Advanced Integration Test** (with mock authenticated routes):
 
-    // Verify resources stored
+For routes requiring authentication, create test-specific versions:
+
+```rust
+// tests/common/test_router.rs (extended)
+use axum::{Router, routing::post, Json, Extension};
+use crate::account::Account;
+
+/// Creates test router with pre-authenticated context
+pub fn create_authenticated_test_router(account: Account) -> Router {
+    Router::new()
+        .route("/test/report", post(test_report_handler))
+        .layer(Extension(account)) // Inject test account directly, bypassing auth
+}
+
+async fn test_report_handler(
+    Extension(account): Extension<Account>,
+    Json(req): Json<ReportRequest>,
+) -> Result<()> {
+    // Reuse actual report handler logic or call it directly
+    report::report(Extension(account), Json(req)).await
+}
+```
+
+**Full Integration Test** (HTTP → Handler → DB):
+
+```rust
+// tests/report_integration_test.rs
+mod common;
+
+use common::{create_test_db_with_account, create_authenticated_test_router, create_test_report_request};
+use axum::{body::Body, http::{Request, StatusCode}};
+use tower::ServiceExt;
+
+#[tokio::test]
+async fn test_report_endpoint_with_mock_auth() {
+    // Setup: Create test DB + account
+    let (db, account) = create_test_db_with_account("test_account").await;
+
+    // Create router with pre-authenticated account (bypasses Cognito)
+    let app = create_authenticated_test_router(account);
+
+    // Build test report request
+    let report_json = create_test_report_request(3, 5); // 3 resources, 5 events
+
+    // Execute: POST to /test/report
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/test/report")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_string(&report_json).unwrap()))
+                .unwrap()
+        )
+        .await
+        .unwrap();
+
+    // Verify: Response successful
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify: Data stored in database
     let resources: Vec<Resource> = db.select("resource").await.unwrap();
     assert_eq!(resources.len(), 3);
 }
 ```
 
-### Example Test 2: API Key Generation (Unit + Integration)
+---
+
+### Authentication Bypass Strategy (Detailed Design)
+
+**Problem**: All production routes use `DashboardAuth::authenticate` or `ReportApiKeyAuth::authenticate` middleware, which require:
+- Valid Cognito JWT tokens (DashboardAuth)
+- Valid encrypted Report API keys with SSM/KMS access (ReportApiKeyAuth)
+
+**Solution**: Test-specific router without authentication middleware
+
+#### Approach 1: Separate Test Router (RECOMMENDED)
+
+**Benefits**:
+- ✅ No modification to production code
+- ✅ Security-safe (test routes never deployed)
+- ✅ Full control over test setup
+- ✅ Can inject mock `DashboardAuth` or `ReportApiKeyAuth` extensions directly
+
+**Implementation**:
 
 ```rust
-// tests/report_api_key_test.rs
+// tests/common/test_router.rs
 
-#[tokio::test]
-async fn test_api_key_roundtrip() {
-    let account_id = "1234567890";
-    let account_salt = rand::thread_rng().gen::<[u8; 16]>().to_vec();
+/// Test router that bypasses authentication by injecting auth extensions directly
+pub fn create_test_router_with_mock_auth(
+    account_id: &str,
+    user_id: &str,
+) -> Router {
+    let mock_dashboard_auth = DashboardAuth::new_for_testing(User::new(user_id));
+    let mock_account = Account::new_for_testing(account_id);
 
-    let api_key = ReportApiKey {
-        id: 12345,
-        account_id: account_id.parse().unwrap(),
-        created_at: Utc::now(),
-        created_by: User { id: "user123".into() },
-    };
+    Router::new()
+        .route("/test/accounts", get(accounts::list_accounts))
+        .route("/test/report", post(report::report))
+        .layer(Extension(mock_dashboard_auth))  // Inject mock auth
+        .layer(Extension(mock_account))          // Inject mock account
+}
+```
 
-    // Generate encrypted key
-    let key_string = api_key.generate_value(account_id, account_salt.clone())
-        .await.unwrap();
+**Required Changes to Production Code** (minimal):
 
-    // Validate format
-    assert!(key_string.starts_with("archodex_"));
-
-    // Decode and verify
-    let decoded = ReportApiKey::decode_and_validate(&key_string).await.unwrap();
-    assert_eq!(decoded.account_id, account_id);
+```rust
+// src/auth.rs - Add test-only constructors
+impl DashboardAuth {
+    #[cfg(test)]
+    pub fn new_for_testing(principal: User) -> Self {
+        Self { principal }
+    }
 }
 
-#[test]
-fn test_tamper_detection() {
-    let key = generate_test_key();
-    let mut tampered = key.clone();
-    tampered.as_bytes_mut()[20] ^= 0xFF;
-
-    let result = ReportApiKey::decode_and_validate(&tampered).await;
-    assert!(result.is_err());
+// src/account.rs - Add test-only constructor
+impl Account {
+    #[cfg(test)]
+    pub fn new_for_testing(id: &str) -> Self {
+        Self { id: id.to_string() }
+    }
 }
+```
+
+#### Approach 2: Mock JWT Tokens (NOT RECOMMENDED)
+
+**Why Rejected**:
+- ❌ Requires setting up mock JWKS server
+- ❌ Complex token generation
+- ❌ Tests network layer unnecessarily
+- ❌ Slower execution
+
+---
+
+### Final Test Structure
+
+```
+tests/
+├── common/
+│   ├── mod.rs                # Re-exports
+│   ├── db.rs                 # Database helpers (in-memory SurrealDB)
+│   ├── fixtures.rs           # Test data builders
+│   └── test_router.rs        # Test routers with auth bypass
+│
+├── health_check_test.rs      # Simple integration (no auth)
+└── report_integration_test.rs # Full integration (mock auth)
+
+src/
+└── principal_chain.rs        # Contains #[cfg(test)] mod tests (unit tests)
 ```
 
 ---
 
-## 7. Documentation Resources
+### Summary of Revised Approach
+
+**Example Test 1 (Unit)**:
+- Location: `src/principal_chain.rs` (#[cfg(test)] module)
+- Tests: `PrincipalChainIdPart` conversions (TryFrom/From traits)
+- Dependencies: None (pure logic)
+- Execution: <1ms
+
+**Example Test 2 (Integration)**:
+- Location: `tests/report_integration_test.rs`
+- Tests: HTTP request → Handler → Database
+- Auth Bypass: Test router with mock `Extension<Account>`
+- Dependencies: In-memory SurrealDB
+- Execution: ~50-100ms
+
+**Benefits of This Approach**:
+- ✅ No AWS credentials or SSM/KMS access needed
+- ✅ No Cognito setup required
+- ✅ Security-safe (test helpers marked #[cfg(test)])
+- ✅ Fast execution (in-memory DB)
+- ✅ Reusable pattern for future tests
+
+---
+
+### Example Test 3: Full Auth Middleware + Report Ingestion (Integration)
+
+**Purpose**: Test the COMPLETE authentication flow including both middleware layers
+
+**File**: `tests/report_with_auth_test.rs`
+
+**What Makes This Different**:
+- ✅ Tests actual auth middleware chain (not bypassed)
+- ✅ Tests `ReportApiKeyAuth::authenticate` middleware (src/auth.rs:196)
+- ✅ Tests `report_api_key_account` middleware (src/db.rs:296)
+- ✅ Tests full request flow: Auth → Account Loading → Handler → DB
+- ✅ Validates that `Extension<ReportApiKeyAuth>` and `Extension<Account>` are correctly injected
+
+**Architecture Understanding**:
+
+Production router for `/report` endpoint has TWO middleware layers:
+```rust
+// src/router.rs:74-77
+let report_api_key_authed_router = Router::new()
+    .route("/report", post(report::report))
+    .layer(middleware::from_fn(report_api_key_account))      // Layer 2: Loads Account
+    .layer(middleware::from_fn(ReportApiKeyAuth::authenticate)); // Layer 1: Auth
+```
+
+**Middleware Flow**:
+1. `ReportApiKeyAuth::authenticate` → Validates auth header → Injects `Extension<ReportApiKeyAuth>`
+2. `report_api_key_account` → Uses auth extension → Loads account from DB → Injects `Extension<Account>`
+3. `report::report` handler → Uses both extensions → Processes report
+
+**Test Strategy**: Use production router with test-specific setup helpers
+
+**Test Implementation**:
+
+```rust
+// tests/report_with_auth_test.rs
+mod common;
+
+use axum::{body::Body, http::{Request, StatusCode}};
+use tower::ServiceExt;
+use common::{create_test_db_with_account, create_test_report_request, setup_test_env};
+
+#[tokio::test]
+async fn test_report_endpoint_with_full_auth_middleware() {
+    // Setup: Create test environment
+    setup_test_env();  // Sets required env vars (ARCHODEX_DOMAIN, etc.)
+
+    // Setup: Create test DB + account
+    let (db, account) = create_test_db_with_account("test_account_123").await;
+
+    // Setup: Store account in accounts DB (required by report_api_key_account middleware)
+    let accounts_db = common::get_test_accounts_db().await;
+    accounts_db.create(("account", &account.id))
+        .content(&account)
+        .await
+        .unwrap();
+
+    // Setup: Create test router using PRODUCTION router function
+    // This includes actual auth middleware!
+    let app = crate::router::router();  // Uses real production router
+
+    // Setup: Build test report
+    let report_json = create_test_report_request(3, 5);
+
+    // Execute: POST to /report with mock Authorization header
+    // We still need to bypass ReportApiKeyAuth validation, so we use a test-specific token
+    let mock_auth_token = common::create_test_auth_token(&account.id);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/report")
+                .header("content-type", "application/json")
+                .header("authorization", mock_auth_token)  // Mock auth token
+                .body(Body::from(serde_json::to_string(&report_json).unwrap()))
+                .unwrap()
+        )
+        .await
+        .unwrap();
+
+    // Verify: Response successful
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify: Middleware properly loaded account
+    // (Account extension was used by handler to access resources_db)
+
+    // Verify: Data stored in database via the authenticated path
+    let resources_db = account.resources_db().await.unwrap();
+    let resources: Vec<Resource> = resources_db.select("resource").await.unwrap();
+    assert_eq!(resources.len(), 3);
+}
+
+#[tokio::test]
+async fn test_report_endpoint_rejects_invalid_auth() {
+    setup_test_env();
+
+    let app = crate::router::router();
+
+    let report_json = create_test_report_request(1, 1);
+
+    // Execute: POST with invalid/missing auth
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/report")
+                .header("content-type", "application/json")
+                // NO Authorization header
+                .body(Body::from(serde_json::to_string(&report_json).unwrap()))
+                .unwrap()
+        )
+        .await
+        .unwrap();
+
+    // Verify: Auth middleware rejected request
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+```
+
+**Required Test Helpers**:
+
+```rust
+// tests/common/auth.rs
+
+/// Creates a mock auth token that bypasses ReportApiKeyAuth validation in tests
+pub fn create_test_auth_token(account_id: &str) -> String {
+    // Option 1: If ReportApiKey::validate_value has #[cfg(test)] bypass
+    format!("test_token_{}", account_id)
+
+    // Option 2: Actually generate valid encrypted key (more realistic)
+    // Requires implementing ReportApiKey::generate_for_testing()
+}
+```
+
+**Required Production Code Changes** (minimal, secure):
+
+**Option A: Bypass in validate_value (simpler)**
+
+```rust
+// src/report_api_key.rs
+impl ReportApiKey {
+    pub async fn validate_value(value: &str) -> Result<(String, u32)> {
+        // Test bypass: allows "test_token_{account_id}" format
+        #[cfg(test)]
+        if let Some(account_id) = value.strip_prefix("test_token_") {
+            return Ok((account_id.to_string(), 99999));
+        }
+
+        // Production validation logic (unchanged)
+        // ... existing SSM/KMS code ...
+    }
+}
+```
+
+**Option B: Test-specific constructor (more realistic)**
+
+```rust
+// src/report_api_key.rs
+impl ReportApiKey {
+    #[cfg(test)]
+    pub fn generate_test_value_for_account(account_id: &str) -> String {
+        // Returns a specially formatted token that validate_value recognizes in tests
+        format!("test_token_{}", account_id)
+    }
+}
+```
+
+**What This Test Validates**:
+
+1. ✅ **Auth middleware executes**: `ReportApiKeyAuth::authenticate` runs
+2. ✅ **Auth extension injected**: Middleware adds `Extension<ReportApiKeyAuth>` to request
+3. ✅ **Account middleware executes**: `report_api_key_account` runs
+4. ✅ **Account loaded from DB**: Middleware queries accounts database
+5. ✅ **Account extension injected**: Middleware adds `Extension<Account>` to request
+6. ✅ **Handler receives extensions**: `report::report` extracts both extensions
+7. ✅ **End-to-end flow**: Full request → auth → account → handler → DB → response
+
+**Why This is Better Than Test 2**:
+
+| Aspect | Test 2 (Mock Auth) | Test 3 (Real Auth Middleware) |
+|--------|-------------------|-------------------------------|
+| Router | Test-specific | Production router |
+| Auth Middleware | Skipped (Extension injected directly) | **Executed** |
+| Account Middleware | Skipped | **Executed** |
+| Coverage | Handler only | **Full request path** |
+| Realism | Medium | **High** |
+| Complexity | Low | Medium |
+
+**Security Note**: The test bypass (`test_token_` prefix) is:
+- ✅ Only compiled in test builds (`#[cfg(test)]`)
+- ✅ Never included in release binaries
+- ✅ Easy to audit (single if statement)
+- ✅ Fails fast in production (no test_ prefix in real tokens)
+
+**Alternative: Environment Variable Bypass** (if preferred):
+
+```rust
+// src/report_api_key.rs
+impl ReportApiKey {
+    pub async fn validate_value(value: &str) -> Result<(String, u32)> {
+        // Test bypass via env var (alternative approach)
+        if std::env::var("ARCHODEX_TEST_MODE").is_ok() {
+            if let Some(account_id) = value.strip_prefix("test_token_") {
+                return Ok((account_id.to_string(), 99999));
+            }
+        }
+
+        // Production validation...
+    }
+}
+```
+
+This approach:
+- ✅ Works in both test and release builds
+- ✅ Controlled via environment variable
+- ⚠️ Requires discipline (must never set in production)
+- ⚠️ Slightly less secure than `#[cfg(test)]`
+
+**Recommendation**: Use **Option A with `#[cfg(test)]`** for maximum security.
+
+---
+
+## 7. Authentication Bypass for Integration Testing (New Section)
+
+### Problem Analysis
+
+**Current Authentication Architecture**:
+- `DashboardAuth::authenticate` middleware: Validates Cognito JWT tokens (src/auth.rs:88-163)
+- `ReportApiKeyAuth::authenticate` middleware: Validates encrypted API keys via SSM/KMS (src/auth.rs:196-228)
+- All protected routes wrapped with these middleware layers (src/router.rs:44-77)
+
+**Testing Challenges**:
+1. JWT tokens require valid Cognito user pool + JWKS endpoint
+2. Report API keys require AWS SSM parameter store + KMS decryption
+3. Both approaches require external AWS services unavailable in tests
+
+### Solution: Test-Specific Constructors (Minimal Production Code Changes)
+
+**Design Pattern**: Add `#[cfg(test)]`-gated constructors to auth types, allowing tests to bypass authentication without compromising production security.
+
+####Required Production Code Modifications
+
+**File**: `src/auth.rs`
+
+```rust
+impl DashboardAuth {
+    // ... existing authenticate method ...
+
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(principal: User) -> Self {
+        Self { principal }
+    }
+}
+
+impl ReportApiKeyAuth {
+    // ... existing authenticate method ...
+
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(account_id: String, key_id: u32) -> Self {
+        Self { account_id, key_id }
+    }
+}
+```
+
+**File**: `src/account.rs` (if needed)
+
+```rust
+impl Account {
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(id: String) -> Self {
+        Self { id }
+    }
+}
+```
+
+**Security Guarantees**:
+- ✅ `#[cfg(test)]` ensures code only compiled in test builds
+- ✅ `pub(crate)` restricts visibility to crate (not public API)
+- ✅ Never included in release binaries
+- ✅ Production authentication paths unchanged
+
+### Test Router Pattern
+
+**File**: `tests/common/test_router.rs`
+
+```rust
+use axum::{Router, routing::{get, post}, Extension};
+use crate::{auth::{DashboardAuth, ReportApiKeyAuth}, account::Account, user::User};
+
+/// Creates test router bypassing auth middleware via Extension injection
+pub fn create_test_router() -> Router {
+    Router::new()
+        .route("/health", get(|| async { "Ok" }))
+}
+
+/// Creates authenticated test router with mock DashboardAuth
+pub fn create_dashboard_authed_test_router(user_id: &str, account_id: &str) -> Router {
+    let mock_auth = DashboardAuth::new_for_testing(User::new(user_id));
+    let mock_account = Account::new_for_testing(account_id.to_string());
+
+    Router::new()
+        .route("/test/accounts", get(accounts::list_accounts))
+        .layer(Extension(mock_auth))
+        .layer(Extension(mock_account))
+}
+
+/// Creates authenticated test router with mock ReportApiKeyAuth
+pub fn create_report_key_authed_test_router(account_id: &str) -> Router {
+    let mock_auth = ReportApiKeyAuth::new_for_testing(account_id.to_string(), 12345);
+    let mock_account = Account::new_for_testing(account_id.to_string());
+
+    Router::new()
+        .route("/test/report", post(report::report))
+        .layer(Extension(mock_auth))
+        .layer(Extension(mock_account))
+}
+```
+
+### Integration Test Patterns
+
+**Pattern 1: Unauthed endpoint** (e.g., /health):
+
+```rust
+#[tokio::test]
+async fn test_health_endpoint() {
+    let app = create_test_router();
+    let response = app.oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+        .await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+```
+
+**Pattern 2: Dashboard-authed endpoint** (e.g., /accounts):
+
+```rust
+#[tokio::test]
+async fn test_list_accounts() {
+    let app = create_dashboard_authed_test_router("user123", "account456");
+    let response = app.oneshot(Request::builder().uri("/test/accounts").body(Body::empty()).unwrap())
+        .await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+```
+
+**Pattern 3: Report-key-authed endpoint** (e.g., /report):
+
+```rust
+#[tokio::test]
+async fn test_report_ingestion() {
+    let (db, _account) = create_test_db_with_account("test_account").await;
+    let app = create_report_key_authed_test_router("test_account");
+
+    let report_json = create_test_report_request(3, 5);
+    let response = app.oneshot(
+        Request::builder()
+            .method("POST")
+            .uri("/test/report")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&report_json).unwrap()))
+            .unwrap()
+    ).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+```
+
+### Alternatives Considered and Rejected
+
+**Alternative 1: Mock JWKS Server**
+- ❌ Complex setup (requires HTTP server, JWT signing)
+- ❌ Slow (network overhead)
+- ❌ Tests authentication logic unnecessarily
+- ❌ Fragile (version incompatibilities)
+
+**Alternative 2: Mock AWS SSM/KMS**
+- ❌ Requires moto or LocalStack
+- ❌ Slow container startup
+- ❌ Complex credential management
+- ❌ Tests encryption unnecessarily
+
+**Alternative 3: Feature Flags for Auth Bypass**
+- ❌ Risk of accidentally deploying with auth disabled
+- ❌ Production code polluted with test logic
+- ❌ Difficult to audit security
+
+### Recommendation Rationale
+
+**Why Test-Specific Constructors Win**:
+1. **Minimal Surface Area**: Only adds 2-3 small functions
+2. **Compile-Time Safety**: `#[cfg(test)]` guarantees no production impact
+3. **Fast Execution**: No network, no AWS, no containers
+4. **Maintainable**: Clear pattern, easy to extend
+5. **Secure**: Cannot accidentally deploy test code
+
+**Implementation Permission Granted**: User has approved modifying production code (`src/auth.rs`, `src/account.rs`) to add `#[cfg(test)]`-gated constructors for testing purposes.
+
+---
+
+## 8. Documentation Resources
 
 ### SurrealDB Testing
 - Official Docs: https://surrealdb.com/docs/surrealdb/embedding/rust

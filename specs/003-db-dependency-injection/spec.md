@@ -62,19 +62,40 @@ Middleware functions like `report_api_key_account` (src/db.rs:296) and `dashboar
 - What happens if middleware injects an Account with a test database, but handler code tries to access global database state?
 - How does connection cleanup work for injected test databases to prevent resource leaks in test suites?
 
+---
+
+### Implementation Note: Authentication Injection (Phase 4.5)
+
+**Context**: User Story 3 requires testing complete request flows including authentication. The initial implementation used `#[cfg(test)]` guards in production code (`src/report_api_key.rs`) to bypass authentication with `test_token_` prefixes. This approach has critical limitations:
+
+- **Compilation unit boundary**: `#[cfg(test)]` guards only work in unit tests, not integration tests (separate compilation units)
+- **Violates Rust philosophy**: Test-specific logic pollutes production validation code
+- **Blocks US3 implementation**: Integration tests in Phase 5 cannot use unit test conditional compilation
+
+**Solution**: Phase 4.5 implements trait-based authentication injection before Phase 5 (US3), using the same dependency injection pattern established for databases:
+
+- `AuthProvider` trait with `RealAuthProvider` (production) and `FixedAuthProvider` (testing)
+- `AppState` includes `auth_provider: Arc<dyn AuthProvider>` alongside database connections
+- Production code remains clean—zero test-specific logic after refactoring
+- Integration tests inject `FixedAuthProvider` to bypass authentication without `#[cfg(test)]` guards
+
+**Rationale**: This is infrastructure enabling US3, not a separate user capability. Phase 5 integration tests validate that the authentication injection works correctly end-to-end. FR-006 mandates the trait-based approach; Phase 4.5 is the implementation mechanism.
+
+---
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 - **FR-001**: System MUST allow tests to inject custom database connections via AuthedAccount wrapper (authentication wrapper that holds Account and injected resources DB connection)
 - **FR-002**: System MUST preserve existing global connection pooling behavior for production code (archodex-com and self-hosted)
-- **FR-003**: `Account::resources_db()` method MUST return the injected connection when present, otherwise fall back to global connection
+- **FR-003**: System MUST provide `AuthedAccount` wrapper that holds injected resources database connection. Handlers MUST access database via `AuthedAccount.resources_db` field instead of calling `Account::resources_db()` method, enabling test injection without modifying the domain Account type
 - **FR-004**: Middleware functions (`dashboard_auth_account`, `report_api_key_account`) MUST support loading accounts with injected database connections for testing
 - **FR-005**: System MUST maintain test isolation—each test gets independent database connections with no shared state
-- **FR-006**: Production code MUST NOT include test-specific connection handling logic in release builds (use `#[cfg(test)]` appropriately)
+- **FR-006**: Production code MUST NOT include test-specific logic. Authentication and database connections MUST use trait-based dependency injection, allowing test implementations to be injected without polluting production code paths with `#[cfg(test)]` guards
 - **FR-007**: System MUST support injection for both accounts database and resources database connections
 - **FR-008**: Axum extension pattern MUST work correctly with injected database connections (handlers extract `Extension<AuthedAccount>` which wraps Account with injected DB)
-- **FR-009**: Test helper functions MUST provide ergonomic APIs for creating accounts with injected connections (e.g., `Account::new_for_testing_with_db()`)
+- **FR-009**: Test helper functions MUST provide ergonomic APIs for integration testing with injected dependencies. Helpers SHOULD be free functions in `tests/common/` module (e.g., `create_test_router(accounts_db, resources_db, auth_provider)`, `seed_test_account(db, account_id)`) rather than test-specific methods on domain types, maintaining separation between domain logic and test infrastructure
 - **FR-010**: System MUST handle connection lifetimes correctly—injected connections live as long as the test, global connections remain static
 
 ### Key Entities *(include if feature involves data)*

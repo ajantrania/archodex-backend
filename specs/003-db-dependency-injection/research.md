@@ -889,6 +889,248 @@ pub(crate) async fn report(
 
 ---
 
+## AuthProvider Pattern: Trait-Based Authentication Injection
+
+**Context**: Phase 4.5 addresses authentication testing. The original approach used `#[cfg(test)]` guards in production code (`src/report_api_key.rs:125-128`) to bypass validation with `test_token_` prefixes. This violates Rust's philosophy of explicit dependencies and doesn't work across compilation unit boundaries (integration tests can't use unit test `#[cfg(test)]` guards).
+
+**Decision**: Use trait-based dependency injection with adapter pattern.
+
+### Architecture
+
+```rust
+// src/auth/provider.rs (NEW)
+use axum::http::Request;
+use std::sync::Arc;
+
+#[derive(Clone, Debug)]
+pub struct AuthContext {
+    pub account_id: String,  // Matches existing (String, u32) tuple from ReportApiKey::validate_value
+    pub key_id: u32,
+}
+
+#[async_trait]
+pub trait AuthProvider: Send + Sync + 'static {
+    async fn authenticate<B>(&self, req: &Request<B>) -> Result<AuthContext, AuthError>;
+}
+```
+
+### Production Implementation: Adapter Pattern
+
+**Key Principle**: RealAuthProvider is a thin adapter that REUSES existing validation logic, doesn't duplicate it.
+
+```rust
+// Production implementation - CALLS existing ReportApiKey::validate_value
+#[derive(Clone)]
+pub struct RealAuthProvider;
+
+#[async_trait]
+impl AuthProvider for RealAuthProvider {
+    #[instrument(err, skip_all)]
+    async fn authenticate<B>(&self, req: &Request<B>) -> Result<AuthContext, AuthError> {
+        // Extract Authorization header (HTTP extraction logic)
+        let Some(header_value) = req.headers().get(AUTHORIZATION) else {
+            bail!("Missing Authorization header");
+        };
+
+        let header_str = header_value.to_str()
+            .context("Failed to parse Authorization header")?;
+
+        // CALL EXISTING VALIDATION LOGIC - don't duplicate
+        // ReportApiKey::validate_value handles: protobuf decode, endpoint check,
+        // KMS decrypt, nonce validation, etc.
+        let (account_id, key_id) = ReportApiKey::validate_value(header_str).await
+            .context("Failed to validate API key")?;
+
+        Ok(AuthContext { account_id, key_id })
+    }
+}
+```
+
+### Test Implementation
+
+```rust
+// Test implementation - bypasses validation entirely
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Clone)]
+pub struct FixedAuthProvider {
+    context: AuthContext,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+#[async_trait]
+impl AuthProvider for FixedAuthProvider {
+    async fn authenticate<B>(&self, _req: &Request<B>) -> Result<AuthContext, AuthError> {
+        // Ignores request headers, returns pre-configured context
+        Ok(self.context.clone())
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl FixedAuthProvider {
+    pub fn new(account_id: impl Into<String>, key_id: u32) -> Self {
+        Self {
+            context: AuthContext {
+                account_id: account_id.into(),
+                key_id,
+            },
+        }
+    }
+}
+```
+
+### Integration with AppState
+
+```rust
+// src/state.rs
+#[derive(Clone)]
+pub struct AppState {
+    pub accounts_db: DBConnection,
+    pub resources_db_factory: Arc<dyn ResourcesDbFactory>,
+    pub auth_provider: Arc<dyn AuthProvider>,  // ← New field
+}
+
+// Production initialization
+pub fn create_production_state() -> AppState {
+    AppState {
+        accounts_db: accounts_db().await?,
+        resources_db_factory: Arc::new(GlobalResourcesDbFactory),
+        auth_provider: Arc::new(RealAuthProvider),  // ← Production auth
+    }
+}
+
+// Test initialization
+#[cfg(test)]
+pub fn create_test_state(
+    accounts_db: DBConnection,
+    resources_db: DBConnection,
+    auth_provider: Arc<dyn AuthProvider>,  // ← Injected test auth
+) -> AppState {
+    AppState {
+        accounts_db,
+        resources_db_factory: Arc::new(TestResourcesDbFactory { db: resources_db }),
+        auth_provider,  // ← Test can use FixedAuthProvider
+    }
+}
+```
+
+### Middleware Usage
+
+```rust
+// src/db.rs - middleware updated to use trait
+pub(crate) async fn report_api_key_account(
+    State(state): State<AppState>,  // ← Extract AppState
+    mut req: Request,
+    next: Next,
+) -> Result<Response> {
+    // Call trait method - works with RealAuthProvider in prod, FixedAuthProvider in tests
+    let auth_context = state.auth_provider.authenticate(&req).await
+        .context("Authentication failed")?;
+
+    // Load account using authenticated context
+    let account = load_account(&state.accounts_db, &auth_context.account_id).await?;
+
+    // Create resources DB connection
+    let resources_db = state.resources_db_factory
+        .create_connection(&account.id, account.service_data_surrealdb_url.as_deref())
+        .await?;
+
+    // Inject AuthedAccount into request
+    req.extensions_mut().insert(AuthedAccount { account, resources_db });
+
+    Ok(next.run(req).await)
+}
+```
+
+### Why This Is Idiomatic Rust
+
+✅ **Single Responsibility**: `ReportApiKey::validate_value` remains a pure validation function
+✅ **Don't Repeat Yourself**: RealAuthProvider *calls* existing validation, doesn't duplicate it
+✅ **Composition Over Duplication**: Trait adapts existing functionality via composition
+✅ **Separation of Concerns**: HTTP extraction in trait, crypto/protobuf in ReportApiKey
+✅ **Preserves Instrumentation**: Existing `#[instrument]` on `validate_value` still works
+✅ **Testability**: `validate_value` can still be unit tested independently
+✅ **No Production Pollution**: Production code has zero test-specific logic after refactoring
+
+### Removed from Production Code
+
+```rust
+// src/report_api_key.rs - REMOVE THIS
+#[instrument(err, skip_all)]
+pub(crate) async fn validate_value(report_api_key_value: &str) -> anyhow::Result<(String, u32)> {
+    // ❌ DELETE THESE LINES (124-128)
+    #[cfg(any(test, feature = "test-support"))]
+    if let Some(account_id) = report_api_key_value.strip_prefix("test_token_") {
+        return Ok((account_id.to_string(), 99999));
+    }
+
+    // ✅ KEEP: Real validation logic (protobuf, KMS, etc.)
+    // This is now called by RealAuthProvider, still unit-testable
+}
+```
+
+### Test Helper
+
+```rust
+// tests/common/auth.rs
+use archodex_backend::auth::provider::{AuthProvider, FixedAuthProvider};
+use std::sync::Arc;
+
+pub fn create_fixed_auth_provider(account_id: &str, key_id: u32) -> Arc<dyn AuthProvider> {
+    Arc::new(FixedAuthProvider::new(account_id, key_id))
+}
+```
+
+### Integration Test Example
+
+```rust
+// tests/report_with_auth_test.rs
+#[tokio::test]
+async fn test_report_ingestion_with_auth() {
+    // Create test databases
+    let accounts_db = create_test_accounts_db().await;
+    let resources_db = create_test_resources_db().await;
+
+    // Seed test account
+    seed_test_account(&accounts_db, "123456").await;
+
+    // Create fixed auth provider (bypasses real JWT validation)
+    let auth_provider = create_fixed_auth_provider("123456", 99999);
+
+    // Create router with all injected dependencies
+    let router = create_test_router(accounts_db, resources_db, auth_provider);
+
+    // Make request (no Authorization header needed - FixedAuthProvider returns fixed context)
+    let response = router
+        .oneshot(Request::builder()
+            .uri("/report")
+            .method("POST")
+            .body(Body::from(serde_json::to_string(&report).unwrap()))
+            .unwrap())
+        .await
+        .unwrap();
+
+    // Verify response
+    assert_eq!(response.status(), 200);
+
+    // Verify database state
+    let resources: Vec<Resource> = resources_db.select("resource").await.unwrap();
+    assert_eq!(resources.len(), 5);
+}
+```
+
+### Benefits Over #[cfg(test)] Guards
+
+| Aspect | #[cfg(test)] Guards | Trait-Based DI |
+|--------|---------------------|----------------|
+| Production code cleanliness | ❌ Contains test logic | ✅ Zero test logic |
+| Compilation unit isolation | ❌ Doesn't work across units | ✅ Works everywhere |
+| Explicit dependencies | ❌ Hidden in conditionals | ✅ Visible in AppState |
+| Test flexibility | ⚠️ String prefix parsing | ✅ Full control via FixedAuthProvider |
+| Accidental test code in prod | ⚠️ Risk if feature flag wrong | ✅ Impossible - separate types |
+| Rust idiomaticity | ❌ Anti-pattern | ✅ Standard DI pattern |
+
+---
+
 ## Summary of Changes from Reviews
 
 | Issue | Status | Impact | Decision |

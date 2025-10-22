@@ -161,6 +161,71 @@
 
 ---
 
+## Phase 4.5: Trait-Based Authentication for Testing (Priority: P1)
+
+**Goal**: Replace `#[cfg(test)]` authentication bypasses with idiomatic trait-based dependency injection for authentication providers
+
+**Rationale**: The current test authentication approach uses `#[cfg(any(test, feature = "test-support"))]` guards in production code (src/report_api_key.rs:125-128), which violates Rust's philosophy of explicit dependencies. The idiomatic approach is to make authentication pluggable via an `AuthProvider` trait, allowing tests to inject a fake authentication provider without polluting production code with test logic.
+
+**Independent Test**: Write a test that injects a `FixedAuthProvider` that always returns specific claims, make an authenticated request, and verify the handler receives the expected authentication context without requiring real JWT tokens.
+
+### Implementation for Phase 4.5
+
+- [ ] T021.1 [P] Create `src/auth/provider.rs` with AuthProvider trait and implementations
+  - Define `AuthProvider` trait with `async fn authenticate<B>(&self, req: &Request<B>) -> Result<AuthContext, AuthError>`
+  - Define `AuthContext` struct: `{ account_id: String, key_id: u32 }` (matches existing validation tuple)
+  - Define `RealAuthProvider` using **adapter pattern**: extracts Authorization header and CALLS existing `ReportApiKey::validate_value()` (reuses logic, doesn't duplicate)
+  - Add `#[instrument(err, skip_all)]` to `RealAuthProvider::authenticate` method per Constitution Principle III
+  - Define `FixedAuthProvider` behind `#[cfg(any(test, feature = "test-support"))]` that returns pre-configured `AuthContext` without validation
+  - **Pattern**: Trait is thin adapter over existing validation, not a reimplementation
+  - See research.md "AuthProvider Pattern" section for complete implementation
+
+- [ ] T021.2 [P] Update `AppState` in `src/state.rs` to include `auth_provider`
+  - Add `auth_provider: Arc<dyn AuthProvider>` field to AppState
+  - Update `create_production_state()` to initialize with `RealAuthProvider`
+  - Production code uses real authentication, tests inject FixedAuthProvider
+
+- [ ] T021.3 Update authentication middleware to use AuthProvider from AppState
+  - Modify `report_api_key_account` middleware in `src/db.rs` to extract `State(state): State<AppState>`
+  - Call `state.auth_provider.authenticate(&req).await?` to get `AuthContext`
+  - Use `AuthContext.account_id` and `AuthContext.key_id` to load account from database
+  - `RealAuthProvider` will internally call existing `ReportApiKey::validate_value()` (no validation logic duplication)
+  - `FixedAuthProvider` (test-only) bypasses validation entirely, returning pre-configured context
+  - **CRITICAL**: Ensure `#[instrument]` attribute is preserved on middleware per Constitution Principle III (authentication flows MUST be traceable)
+
+- [ ] T021.4 [P] Refactor `ReportApiKey::validate_value` to remove `#[cfg(test)]` guard
+  - Remove lines 124-128 from `src/report_api_key.rs` (test token bypass)
+  - This logic moves to FixedAuthProvider, keeping production validation code clean
+  - Production code no longer contains any test-specific logic
+
+- [ ] T021.5 [P] Create test helper `create_fixed_auth_provider` in `tests/common/auth.rs`
+  - Function signature: `create_fixed_auth_provider(account_id: &str, key_id: u32) -> Arc<dyn AuthProvider>`
+  - Creates FixedAuthProvider with specified claims
+  - Returns Arc for injection into test AppState
+  - See user-provided example for pattern (lines 54-60 of user input)
+
+- [ ] T021.6 Update `create_test_router` in `tests/common/mod.rs` to accept AuthProvider
+  - **Updates the function originally created in T013** - this is the same `create_test_router` helper
+  - Updated function signature: `create_test_router(accounts_db: DBConnection, resources_db: DBConnection, auth_provider: Arc<dyn AuthProvider>) -> Router`
+  - Update AppState construction to include auth_provider parameter (third field added to existing AppState)
+  - Allows tests to inject authentication behavior in addition to database connections
+
+- [ ] T021.7 Update existing integration tests to use FixedAuthProvider
+  - Modify `tests/report_with_auth_test.rs` to create test router with FixedAuthProvider
+  - Remove reliance on `test_token_` prefix (no longer needed with trait injection)
+  - Tests now use clean dependency injection for both database AND authentication
+  - Validates end-to-end flow: FixedAuthProvider → middleware loads account → handler processes request
+
+- [ ] T021.8 [P] Add documentation to AuthProvider trait and implementations
+  - Document trait purpose: "Pluggable authentication for production and testing"
+  - Document RealAuthProvider: "Production implementation using JWT/API key validation"
+  - Document FixedAuthProvider: "Test implementation that returns pre-configured claims"
+  - Add examples showing how to inject in tests
+
+**Checkpoint**: At this point, authentication is fully trait-based. Production code has zero test logic, tests use clean dependency injection for authentication. This unblocks Phase 5 integration tests which can now run without `#[cfg(test)]` compilation unit issues.
+
+---
+
 ## Phase 5: User Story 3 - Middleware Can Access Database Through Dependency Injection (Priority: P2)
 
 **Goal**: Middleware functions support dependency injection for testing while maintaining production behavior
@@ -238,8 +303,9 @@ The dependency injection infrastructure is complete and functional as demonstrat
 
 - [ ] T028 Validate Constitution compliance
   - Verify all #[instrument] attributes preserved on production functions
+  - **Specifically verify**: Authentication middleware (`report_api_key_account`, `dashboard_auth_account`) and `RealAuthProvider::authenticate` retain `#[instrument]` after Phase 4.5 refactoring
   - Verify pub(crate) visibility maintained for Account type (security boundary)
-  - Verify no #[cfg(test)] guards in production code paths
+  - Verify no #[cfg(test)] guards in production code paths (all test logic moved to trait implementations)
   - Run `cargo fmt` and `cargo clippy` as quality gates
 
 ---
@@ -259,8 +325,14 @@ The dependency injection infrastructure is complete and functional as demonstrat
   - T015 depends on T008-T014 (needs all infrastructure in place)
 - **User Story 2 (Phase 4)**: Depends on User Story 1 completion (validates the changes work in production)
   - T016-T018 must run sequentially (build → test → manual validation)
-- **User Story 3 (Phase 5)**: Depends on User Story 1 completion (tests middleware specifically)
+- **Trait-Based Authentication (Phase 4.5)**: Depends on User Story 2 completion (requires AppState infrastructure)
+  - T021.1, T021.2, T021.4, T021.5, T021.8 can run in parallel (different files)
+  - T021.3 depends on T021.1 (needs AuthProvider trait defined)
+  - T021.6 depends on T021.5 (needs test helper)
+  - T021.7 depends on T021.6 (needs updated test router helper)
+- **User Story 3 (Phase 5)**: Depends on Phase 4.5 completion (needs trait-based auth for full integration testing)
   - T019-T021 can run in parallel (different test cases)
+  - Note: These tests benefit from FixedAuthProvider, no longer limited by `#[cfg(test)]` compilation units
 - **Polish (Phase 6)**: Depends on all user stories being complete
   - T022-T024 can run in parallel (documentation in different files)
   - T025-T028 should run sequentially for validation
@@ -295,6 +367,12 @@ The dependency injection infrastructure is complete and functional as demonstrat
 **Phase 3 (User Story 1)**:
 - T011 (handler updates) can run while T008-T010 (middleware) are in progress
 - T012, T013, T014 (test helpers) can all run in parallel
+
+**Phase 4.5 (Trait-Based Authentication)**:
+- T021.1, T021.2, T021.4, T021.5, T021.8 can all run in parallel
+- T021.3 must wait for T021.1 (needs AuthProvider trait)
+- T021.6 must wait for T021.5 (needs test helper)
+- T021.7 must wait for T021.6 (needs updated router helper)
 
 **Phase 5 (User Story 3)**:
 - T019, T020, T021 (middleware tests) can all run in parallel
@@ -339,19 +417,23 @@ Task T014: "Create test helper functions in tests/common/mod.rs"
 
 1. Complete MVP (User Stories 1) → ~8-10 hours
 2. Add User Story 2 (T016-T018) - Production validation → ~2-3 hours
-3. Add User Story 3 (T019-T021) - Middleware testing → ~2-3 hours
-4. Polish (T022-T028) - Documentation and validation → ~2-3 hours
-5. **Total time: ~14-18 hours (2-2.5 days)**
+3. Add Phase 4.5 (T021.1-T021.8) - Trait-based authentication → ~3-4 hours
+4. Add User Story 3 (T019-T021) - Middleware testing → ~2-3 hours
+5. Polish (T022-T028) - Documentation and validation → ~2-3 hours
+6. **Total time: ~17-23 hours (2-3 days)**
 
 Each story adds value and can be demonstrated independently.
+
+**Phase 4.5 Note**: This new phase removes `#[cfg(test)]` authentication bypasses from production code, making the codebase more idiomatic and unblocking full integration testing. It's essential for completing Phase 5 properly.
 
 ### Incremental Delivery
 
 1. **Checkpoint 1**: After Phase 2 (Foundational) → Foundation ready
 2. **Checkpoint 2**: After Phase 3 (US1) → Test infrastructure working (MVP!)
 3. **Checkpoint 3**: After Phase 4 (US2) → Production validated
-4. **Checkpoint 4**: After Phase 5 (US3) → Middleware fully tested
-5. **Checkpoint 5**: After Phase 6 (Polish) → Feature complete
+4. **Checkpoint 4**: After Phase 4.5 (Auth Traits) → Authentication fully injectable, production code clean
+5. **Checkpoint 5**: After Phase 5 (US3) → Middleware fully tested with complete integration tests
+6. **Checkpoint 6**: After Phase 6 (Polish) → Feature complete
 
 ### Parallel Team Strategy
 
@@ -364,10 +446,14 @@ With multiple developers:
    - **Dev C**: T012-T014 (test helpers) - ~2 hours
 3. **Dev A**: T015 (integration test) - ~1 hour
 4. **Dev B**: Phase 4 (US2 validation) - ~2-3 hours
-5. **Dev C**: Phase 5 (US3 middleware tests) - ~2-3 hours
-6. **All**: Phase 6 (Polish) together - ~2 hours
+5. Once Phase 4 complete, split Phase 4.5:
+   - **Dev A**: T021.1, T021.2 (AuthProvider trait, AppState update) - ~2 hours
+   - **Dev B**: T021.3, T021.4 (middleware update, remove test guards) - ~1.5 hours
+   - **Dev C**: T021.5, T021.6, T021.7 (test infrastructure) - ~1.5 hours
+6. **Dev C**: Phase 5 (US3 middleware tests) - ~2-3 hours (now fully functional with auth traits)
+7. **All**: Phase 6 (Polish) together - ~2 hours
 
-**Parallel completion time: ~10-12 hours**
+**Parallel completion time: ~13-15 hours**
 
 ---
 
@@ -381,6 +467,8 @@ With multiple developers:
 - **Critical**: Layer order in router registration (research.md lines 657-673) - Auth must run before account loading
 - **Critical**: TestResourcesDbFactory must be in tests/common/, not src/ (research.md lines 717-743)
 - **Critical**: AuthedAccount wrapper approach preferred over mutating Account (research.md lines 683-710)
+- **Critical**: Phase 4.5 removes `#[cfg(test)]` guards from production code - authentication becomes trait-based
+- **Critical**: FixedAuthProvider enables integration tests without `#[cfg(test)]` compilation unit issues
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
 
 ---
@@ -394,6 +482,10 @@ With multiple developers:
 
 2. **Handler signature changes** (T011): Breaking all handler signatures could cause compilation errors
    - Mitigation: Use compiler to find all occurrences, update systematically
+
+3. **Authentication refactoring** (Phase 4.5): Moving auth logic from `#[cfg(test)]` guards to traits could break existing auth flow
+   - Mitigation: Implement RealAuthProvider to use existing validation logic, add integration tests to verify auth still works
+   - Keep existing validation code in `ReportApiKey::validate_value`, only remove test bypass
 
 ### Medium Risk Items
 
@@ -450,12 +542,15 @@ After completing all tasks, validate these success criteria from spec.md:
 |------|---------|-----------|
 | `src/state.rs` | NEW: AppState, traits, factories | US1 (Foundation) |
 | `src/account.rs` | NEW: AuthedAccount wrapper | US1 (Foundation) |
-| `src/db.rs` | Modified: Middleware with State | US1, US3 |
+| `src/auth/provider.rs` | NEW: AuthProvider trait, RealAuthProvider, FixedAuthProvider | Phase 4.5 |
+| `src/db.rs` | Modified: Middleware with State | US1, US3, Phase 4.5 |
 | `src/router.rs` | Modified: State initialization, layer order | US1, US2 |
 | `src/handlers/*.rs` | Modified: Extract AuthedAccount | US1 |
+| `src/report_api_key.rs` | Modified: Remove `#[cfg(test)]` bypass | Phase 4.5 |
 | `tests/common/providers.rs` | NEW: TestResourcesDbFactory | US1 |
-| `tests/common/mod.rs` | NEW: Test helpers | US1 |
-| `tests/report_with_auth_test.rs` | Modified: Integration tests | US1, US3 |
+| `tests/common/auth.rs` | NEW: Test auth helpers | Phase 4.5 |
+| `tests/common/mod.rs` | NEW: Test helpers | US1, Phase 4.5 |
+| `tests/report_with_auth_test.rs` | Modified: Integration tests | US1, US3, Phase 4.5 |
 
 ---
 
@@ -467,12 +562,13 @@ After completing all tasks, validate these success criteria from spec.md:
 | Phase 2: Foundational | T004-T007 | 3-4 hours | **YES** |
 | Phase 3: User Story 1 | T008-T015 | 4-5 hours | **YES** |
 | Phase 4: User Story 2 | T016-T018 | 2-3 hours | YES |
+| Phase 4.5: Auth Traits | T021.1-T021.8 | 3-4 hours | **YES** |
 | Phase 5: User Story 3 | T019-T021 | 2-3 hours | No |
 | Phase 6: Polish | T022-T028 | 2-3 hours | No |
-| **TOTAL** | **28 tasks** | **14-18 hours** | - |
+| **TOTAL** | **36 tasks** | **17-23 hours** | - |
 
-**Critical Path**: Phase 1 → Phase 2 → Phase 3 (US1) → Phase 4 (US2) → Phase 6 (validation)
+**Critical Path**: Phase 1 → Phase 2 → Phase 3 (US1) → Phase 4 (US2) → Phase 4.5 (Auth) → Phase 5 (US3) → Phase 6 (validation)
 
 **Minimum MVP**: Phase 1 + Phase 2 + Phase 3 = ~8-10 hours
 
-**Parallel Opportunities**: Up to 30% time savings with 3 developers (~10-12 hours total)
+**Parallel Opportunities**: Up to 30% time savings with 3 developers (~13-15 hours total)

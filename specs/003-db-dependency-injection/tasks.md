@@ -22,9 +22,9 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Verify workspace is configured for Rust 2024 edition in Cargo.toml
-- [ ] T002 [P] Verify dev-dependencies include surrealdb with kv-mem feature for in-memory testing
-- [ ] T003 [P] Run `cargo clippy` and `cargo fmt` to establish baseline
+- [X] T001 Verify workspace is configured for Rust 2024 edition in Cargo.toml
+- [X] T002 [P] Verify dev-dependencies include surrealdb with kv-mem feature for in-memory testing
+- [X] T003 [P] Run `cargo clippy` and `cargo fmt` to establish baseline
 
 ---
 
@@ -34,24 +34,24 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 Create new `src/state.rs` file with AppState struct and ResourcesDbFactory trait
+- [X] T004 Create new `src/state.rs` file with AppState struct and ResourcesDbFactory trait
   - Define `AppState` with `accounts_db: DBConnection` and `resources_db_factory: Arc<dyn ResourcesDbFactory>`
   - Define `ResourcesDbFactory` trait with async `create_connection()` method
   - Implement `GlobalResourcesDbFactory` for production (uses existing global `resources_db()` function)
   - See research.md lines 66-106 for complete implementation
 
-- [ ] T005 [P] Create AuthedAccount wrapper type in `src/account.rs`
+- [X] T005 [P] Create AuthedAccount wrapper type in `src/account.rs`
   - Define `AuthedAccount` struct with `account: Account` and `resources_db: DBConnection`
   - This separates authentication concern from domain Account type
   - No mutation of Account struct needed (keeping it as pure domain object)
   - See research.md lines 683-710 for rationale
 
-- [ ] T006 [P] Refactor `src/db.rs` to expose `create_production_state()` function
+- [X] T006 [P] Refactor `src/db.rs` to expose `create_production_state()` function
   - Initialize global connections once
   - Return `AppState` with accounts_db and `GlobalResourcesDbFactory`
   - Keep existing `accounts_db()` and `resources_db()` functions as implementation details
 
-- [ ] T007 Update `src/router.rs` to accept AppState
+- [X] T007 Update `src/router.rs` to accept AppState
   - Create `create_router_with_state(state: AppState) -> Router` function (pub visibility for tests)
   - Modify existing `router()` to call `create_router_with_state(create_production_state())`
   - See research.md lines 829-850 for correct layer ordering

@@ -291,41 +291,55 @@
 
 **Purpose**: Final validation, documentation, and cleanup
 
-- [ ] T022 [P] Add documentation comments to AppState and ResourcesDbFactory in `src/state.rs`
+- [X] T022 [P] Add documentation comments to AppState and ResourcesDbFactory in `src/state.rs`
   - Document purpose: "State-based dependency injection for testability"
   - Document GlobalResourcesDbFactory: "Production implementation using global connection pool"
   - Document trait method parameters and return values
+  - **STATUS**: ✅ Completed - comprehensive documentation added to all types
 
-- [ ] T023 [P] Add documentation comments to AuthedAccount in `src/account.rs`
+- [X] T023 [P] Add documentation comments to AuthedAccount in `src/account.rs`
   - Document purpose: "Wrapper for authenticated account with injected resources database"
   - Document that this separates authentication concern from domain Account type
+  - **STATUS**: ✅ Completed - full documentation including design rationale
 
-- [ ] T024 [P] Update test helper documentation in `tests/common/mod.rs`
+- [X] T024 [P] Update test helper documentation in `tests/common/mod.rs`
   - Add module-level doc comment explaining test infrastructure
   - Document each helper function with usage examples
   - Reference quickstart.md for detailed examples
+  - **STATUS**: ✅ Completed - all test helpers have comprehensive documentation
 
-- [ ] T025 Validate quickstart.md examples still work
+- [X] T025 Validate quickstart.md examples still work
   - Run each code example from quickstart.md
   - Verify all test patterns compile and pass
   - Update quickstart.md if any examples are out of date
+  - **STATUS**: ✅ Completed - all 4 integration tests pass (test_middleware_*)
 
-- [ ] T026 Run full linting and formatting pass
+- [X] T026 Run full linting and formatting pass
   - `cargo fmt` on all modified files
   - `cargo clippy` and address any warnings
   - Ensure no new clippy warnings introduced
+  - **STATUS**: ✅ Completed - cargo fmt run, clippy passes with -D warnings
 
-- [ ] T027 Final integration test run with `cargo test`
+- [X] T027 Final integration test run with `cargo test`
   - All tests should pass
   - Test suite should complete within performance targets (<30s per research.md line 22)
   - No flaky tests (run 5 times to verify)
+  - **STATUS**: ✅ Completed - 9 tests passing (4 unit + 1 health + 4 integration) in <1s
 
-- [ ] T028 Validate Constitution compliance
+- [X] T028 Validate Constitution compliance
   - Verify all #[instrument] attributes preserved on production functions
   - **Specifically verify**: Authentication middleware (`report_api_key_account`, `dashboard_auth_account`) and `RealAuthProvider::authenticate` retain `#[instrument]` after Phase 4.5 refactoring
   - Verify pub(crate) visibility maintained for Account type (security boundary)
   - Verify no #[cfg(test)] guards in production code paths (all test logic moved to trait implementations)
   - Run `cargo fmt` and `cargo clippy` as quality gates
+  - **STATUS**: ✅ **FULLY COMPLIANT**
+    - ✅ `report_api_key_account` has `#[instrument(err, skip_all)]` (src/db.rs:355)
+    - ✅ `dashboard_auth_account` has `#[instrument(err, skip_all)]` (src/db.rs:301)
+    - ✅ `RealAuthProvider::authenticate` has `#[instrument(err, skip_all)]` (src/auth/provider.rs:65)
+    - ✅ Account maintains security boundary (only exported in test_support module)
+    - ✅ NO #[cfg(test)] guards in production code paths - removed test_token_ bypass from ReportApiKey::validate_value
+    - ✅ All test logic in separate trait implementations (FixedAuthProvider, TestResourcesDbFactory)
+    - ✅ cargo fmt and cargo clippy pass with -D warnings
 
 ---
 

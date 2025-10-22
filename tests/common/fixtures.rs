@@ -32,7 +32,7 @@ pub fn create_simple_test_report_request() -> serde_json::Value {
 /// - Resource tree upsert with nested contains relationships
 /// - Principal chain creation and linking
 /// - Event relationship creation between principals and resources
-/// - Timestamp handling (first_seen_at, last_seen_at)
+/// - Timestamp handling (`first_seen_at``last_seen_at`at)
 pub fn create_test_report_request() -> serde_json::Value {
     serde_json::json!({
         "resource_captures": [

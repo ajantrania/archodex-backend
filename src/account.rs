@@ -125,6 +125,7 @@ impl Account {
 
     /// Creates an Account for testing, bypassing normal creation flow.
     #[cfg(any(test, feature = "test-support"))]
+    #[must_use]
     pub fn new_for_testing(id: String, salt: Vec<u8>) -> Self {
         Self {
             id,

@@ -8,15 +8,15 @@ use archodex_backend::test_support::{DBConnection, ResourcesDbFactory};
 use archodex_error::anyhow::Result;
 use async_trait::async_trait;
 
-/// Test implementation of ResourcesDbFactory that returns pre-configured in-memory databases
+/// Test implementation of `ResourcesDbFactory` that returns pre-configured in-memory databases
 ///
-/// This factory is used in tests to inject in-memory SurrealDB connections into the
-/// application state. Unlike the production GlobalResourcesDbFactory which uses global
+/// This factory is used in tests to inject in-memory `SurrealDB` connections into the
+/// application state. Unlike the production `GlobalResourcesDbFactory` which uses global
 /// connection pools, this factory returns clones of pre-configured test databases.
 ///
 /// # Design
 /// - Holds references to both accounts and resources test databases
-/// - Returns clones of these databases regardless of account_id or service_url parameters
+/// - Returns clones of these databases regardless of `account_id` o`service_url`rl parameters
 /// - Enables complete test isolation by using separate database instances per test
 ///
 /// # Usage
@@ -62,7 +62,7 @@ impl ResourcesDbFactory for TestResourcesDbFactory {
 
     /// Returns the test resources database connection
     ///
-    /// Ignores account_id and service_url parameters and always returns a clone of
+    /// Ignores `account_id` and `service_url` parameters and always returns a clone of
     /// the test resources database. This allows tests to seed and query the same
     /// database instance regardless of which account is being accessed.
     ///

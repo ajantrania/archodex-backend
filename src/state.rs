@@ -27,7 +27,7 @@ pub struct AppState {
 ///
 /// # Parameters
 /// - `account_id`: The account ID for namespace selection
-/// - `service_url`: Optional custom SurrealDB URL (None uses default from environment)
+/// - `service_url`: Optional custom `SurrealDB` URL (None uses default from environment)
 
 #[async_trait]
 pub trait ResourcesDbFactory {

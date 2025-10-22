@@ -140,7 +140,7 @@ pub(crate) struct ResourceId(Vec<ResourceIdPart>);
 
 #[cfg(test)]
 impl ResourceId {
-    /// Creates a ResourceId from a vector of (type, id) string pairs for testing
+    /// Creates a `ResourceId` from a vector of (type, id) string pairs for testing
     pub(crate) fn from_parts(parts: Vec<(&str, &str)>) -> Self {
         let array = surrealdb::sql::Array::from(
             parts

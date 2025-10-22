@@ -61,7 +61,7 @@ pub struct FixedAuthProvider {
 
 #[cfg(any(test, feature = "test-support"))]
 impl FixedAuthProvider {
-    /// Creates a new FixedAuthProvider with pre-configured authentication context.
+    /// Creates a new `FixedAuthProvider` with pre-configured authentication context.
     pub fn new(account_id: impl Into<String>, key_id: u32) -> Self {
         Self {
             context: AuthContext {

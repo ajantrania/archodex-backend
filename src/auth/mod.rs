@@ -202,7 +202,7 @@ pub(crate) struct ReportApiKeyAuth {
 impl ReportApiKeyAuth {
     /// Creates auth context from validated credentials.
     ///
-    /// Only use after authentication validation (e.g., via AuthProvider).
+    /// Only use after authentication validation (e.g., via `AuthProvider`).
     pub(crate) fn from_credentials(account_id: String, key_id: u32) -> Self {
         Self { account_id, key_id }
     }

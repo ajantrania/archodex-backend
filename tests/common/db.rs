@@ -4,10 +4,10 @@
 use archodex_backend::test_support::{Account, DBConnection};
 use surrealdb::{Surreal, engine::any::Any};
 
-/// Creates an in-memory accounts database wrapped in DBConnection
+/// Creates an in-memory accounts database wrapped in `DBConnection`
 ///
-/// This creates a test accounts database using SurrealDB's memory engine and wraps
-/// it in the DBConnection enum for compatibility with the application's database layer.
+/// This creates a test accounts database using `SurrealDB`'s memory engine and wraps
+/// it in the `DBConnection` enum for compatibility with the application's database layer.
 /// Use this function when setting up test state for integration tests.
 ///
 /// # Examples
@@ -28,10 +28,10 @@ pub async fn create_test_accounts_db() -> DBConnection {
     DBConnection::Concurrent(db)
 }
 
-/// Creates an in-memory resources database wrapped in DBConnection
+/// Creates an in-memory resources database wrapped in `DBConnection`
 ///
-/// This creates a test resources database using SurrealDB's memory engine and wraps
-/// it in the DBConnection enum for compatibility with the application's database layer.
+/// This creates a test resources database using `SurrealDB`'s memory engine and wraps
+/// it in the `DBConnection` enum for compatibility with the application's database layer.
 /// Use this function when setting up test state for integration tests.
 ///
 /// # Examples
@@ -108,7 +108,7 @@ pub async fn seed_test_account(db: &DBConnection, account_id: &str) -> Account {
 /// Seeds a test API key into the resources database
 ///
 /// This function creates a valid (non-revoked) API key entry in the resources database.
-/// This is necessary for integration tests that use FixedAuthProvider, as the middleware
+/// This is necessary for integration tests that use `FixedAuthProvider`, as the middleware
 /// still validates that the API key exists and is not revoked.
 ///
 /// # Parameters

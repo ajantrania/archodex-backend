@@ -4,7 +4,7 @@
 use archodex_backend::test_support::{AuthProvider, FixedAuthProvider};
 use std::sync::Arc;
 
-/// Creates a FixedAuthProvider for testing
+/// Creates a `FixedAuthProvider` for testing
 ///
 /// This creates an authentication provider that bypasses real validation
 /// and returns pre-configured credentials. Useful for integration tests

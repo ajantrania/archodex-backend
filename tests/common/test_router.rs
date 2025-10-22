@@ -38,12 +38,12 @@ pub fn create_test_router() -> Router {
 ///
 /// This function creates a full application router with dependency-injected test databases
 /// and authentication. The router includes all routes and middleware from the production
-/// application, but uses in-memory test databases and FixedAuthProvider for authentication.
+/// application, but uses in-memory test databases and `FixedAuthProvider` for authentication.
 ///
 /// # Parameters
 /// * `accounts_db` - In-memory database for accounts (authentication and authorization)
 /// * `resources_db` - In-memory database for resources (per-account data)
-/// * `auth_provider` - Authentication provider (typically FixedAuthProvider for tests)
+/// * `auth_provider` - Authentication provider (typically `FixedAuthProvider` for tests)
 ///
 /// # Examples
 ///

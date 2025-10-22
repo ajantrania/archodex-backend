@@ -277,7 +277,7 @@ pub(crate) async fn resources_db(
     Ok(DBConnection::Concurrent(db))
 }
 
-/// Creates production AppState with global database connections.
+/// Creates production `AppState` with global database connections.
 #[instrument(err)]
 pub async fn create_production_state() -> Result<AppState> {
     let resources_db_factory = Arc::new(GlobalResourcesDbFactory);

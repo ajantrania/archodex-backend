@@ -2,6 +2,7 @@
 //
 // This module provides test-specific implementations of the ResourcesDbFactory trait,
 // allowing tests to inject in-memory database connections into the application state.
+#![allow(dead_code)]
 
 use archodex_backend::test_support::{DBConnection, ResourcesDbFactory};
 use archodex_error::anyhow::Result;

@@ -1,4 +1,5 @@
 // Test authentication helpers
+#![allow(dead_code)]
 
 use archodex_backend::test_support::{AuthProvider, FixedAuthProvider};
 use std::sync::Arc;

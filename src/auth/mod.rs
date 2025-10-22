@@ -174,15 +174,6 @@ impl DashboardAuth {
         &self.principal
     }
 
-    /// Creates a DashboardAuth for testing purposes
-    ///
-    /// This bypasses the normal JWT validation flow and allows tests to inject
-    /// authentication state directly. Only compiled in test builds.
-    #[cfg(test)]
-    pub(crate) fn new_for_testing(principal: User) -> Self {
-        Self { principal }
-    }
-
     #[instrument]
     pub(crate) async fn validate_account_access(&self, account_id: &str) -> Result<()> {
         if accounts_db()
@@ -217,15 +208,6 @@ impl ReportApiKeyAuth {
     /// access validation checks.
     pub(crate) fn from_credentials(account_id: String, key_id: u32) -> Self {
         Self { account_id, key_id }
-    }
-
-    /// Creates a ReportApiKeyAuth for testing purposes
-    ///
-    /// This bypasses the normal API key validation flow and allows tests to inject
-    /// authentication state directly. Only compiled in test builds.
-    #[cfg(test)]
-    pub(crate) fn new_for_testing(account_id: String, key_id: u32) -> Self {
-        Self::from_credentials(account_id, key_id)
     }
 
     pub(crate) async fn validate_account_access(&self, db: &Surreal<Any>) -> Result<()> {

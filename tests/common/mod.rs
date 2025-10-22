@@ -12,18 +12,15 @@ pub mod fixtures;
 pub mod providers;
 pub mod test_router;
 
-pub use auth::*;
-pub use db::*;
-pub use fixtures::*;
-pub use providers::*;
-pub use test_router::*;
-
-/// Sets up environment variables required for testing
-pub fn setup_test_env() {
-    // Set required environment variables for test mode
-    // SAFETY: This is only called in tests, and we're setting string values
-    unsafe {
-        std::env::set_var("ARCHODEX_DOMAIN", "test.archodex.com");
-        std::env::set_var("ARCHODEX_TEST_MODE", "1");
-    }
-}
+// Re-export commonly used test helpers for convenience
+// Note: Different test binaries use different subsets, so some may be unused in each binary
+#[allow(unused_imports)]
+pub use auth::create_fixed_auth_provider;
+#[allow(unused_imports)]
+pub use db::{
+    create_test_accounts_db, create_test_resources_db, seed_test_account, seed_test_api_key,
+};
+#[allow(unused_imports)]
+pub use fixtures::{create_simple_test_report_request, create_test_report_request};
+#[allow(unused_imports)]
+pub use test_router::{create_test_router, create_test_router_with_state};

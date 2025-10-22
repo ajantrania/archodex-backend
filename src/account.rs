@@ -144,7 +144,6 @@ impl Account {
             deleted_by: None,
         }
     }
-
 }
 
 pub(crate) trait AccountQueries<'r, C: surrealdb::Connection> {

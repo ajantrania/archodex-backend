@@ -1,4 +1,5 @@
 // Test router helpers for integration testing
+#![allow(dead_code)]
 
 use super::providers::TestResourcesDbFactory;
 use archodex_backend::test_support::{

@@ -9,7 +9,18 @@
       "WebFetch(domain:research.google.com)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:docs.rs)",
-      "Read(//Users/ajantrania/code/archodex/surrealdb/**)"
+      "Read(//Users/ajantrania/code/archodex/surrealdb/**)",
+      "Bash(.specify/scripts/bash/create-new-feature.sh:*)",
+      "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
+      "Bash(.specify/scripts/bash/setup-plan.sh:*)",
+      "Bash(.specify/scripts/bash/update-agent-context.sh:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo:*)",
+      "Bash(awk:*)",
+      "Bash(cargo build:*)"
     ],
     "deny": []
   }

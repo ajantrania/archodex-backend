@@ -171,56 +171,63 @@
 
 ### Implementation for Phase 4.5
 
-- [ ] T021.1 [P] Create `src/auth/provider.rs` with AuthProvider trait and implementations
-  - Define `AuthProvider` trait with `async fn authenticate<B>(&self, req: &Request<B>) -> Result<AuthContext, AuthError>`
+- [X] T021.1 [P] Create `src/auth/provider.rs` with AuthProvider trait and implementations
+  - Define `AuthProvider` trait with `async fn authenticate(&self, headers: &HeaderMap) -> Result<AuthContext, AuthError>`
   - Define `AuthContext` struct: `{ account_id: String, key_id: u32 }` (matches existing validation tuple)
   - Define `RealAuthProvider` using **adapter pattern**: extracts Authorization header and CALLS existing `ReportApiKey::validate_value()` (reuses logic, doesn't duplicate)
   - Add `#[instrument(err, skip_all)]` to `RealAuthProvider::authenticate` method per Constitution Principle III
   - Define `FixedAuthProvider` behind `#[cfg(any(test, feature = "test-support"))]` that returns pre-configured `AuthContext` without validation
   - **Pattern**: Trait is thin adapter over existing validation, not a reimplementation
   - See research.md "AuthProvider Pattern" section for complete implementation
+  - STATUS: ✅ Completed - auth module created with all required types
 
-- [ ] T021.2 [P] Update `AppState` in `src/state.rs` to include `auth_provider`
+- [X] T021.2 [P] Update `AppState` in `src/state.rs` to include `auth_provider`
   - Add `auth_provider: Arc<dyn AuthProvider>` field to AppState
   - Update `create_production_state()` to initialize with `RealAuthProvider`
   - Production code uses real authentication, tests inject FixedAuthProvider
+  - STATUS: ✅ Completed - AppState updated, production state includes RealAuthProvider
 
-- [ ] T021.3 Update authentication middleware to use AuthProvider from AppState
+- [X] T021.3 Update authentication middleware to use AuthProvider from AppState
   - Modify `report_api_key_account` middleware in `src/db.rs` to extract `State(state): State<AppState>`
-  - Call `state.auth_provider.authenticate(&req).await?` to get `AuthContext`
+  - Call `state.auth_provider.authenticate(req.headers()).await?` to get `AuthContext`
   - Use `AuthContext.account_id` and `AuthContext.key_id` to load account from database
-  - `RealAuthProvider` will internally call existing `ReportApiKey::validate_value()` (no validation logic duplication)
+  - `RealAuthProvider` internally calls existing `ReportApiKey::validate_value()` (no validation logic duplication)
   - `FixedAuthProvider` (test-only) bypasses validation entirely, returning pre-configured context
   - **CRITICAL**: Ensure `#[instrument]` attribute is preserved on middleware per Constitution Principle III (authentication flows MUST be traceable)
+  - STATUS: ✅ Completed - middleware updated, ReportApiKeyAuth::authenticate middleware removed from router
 
-- [ ] T021.4 [P] Refactor `ReportApiKey::validate_value` to remove `#[cfg(test)]` guard
-  - Remove lines 124-128 from `src/report_api_key.rs` (test token bypass)
+- [X] T021.4 [P] Refactor `ReportApiKey::validate_value` to remove `#[cfg(test)]` guard
+  - Remove lines 123-128 from `src/report_api_key.rs` (test token bypass)
   - This logic moves to FixedAuthProvider, keeping production validation code clean
   - Production code no longer contains any test-specific logic
+  - STATUS: ✅ Completed - test bypass removed, production code is clean
 
-- [ ] T021.5 [P] Create test helper `create_fixed_auth_provider` in `tests/common/auth.rs`
+- [X] T021.5 [P] Create test helper `create_fixed_auth_provider` in `tests/common/auth.rs`
   - Function signature: `create_fixed_auth_provider(account_id: &str, key_id: u32) -> Arc<dyn AuthProvider>`
   - Creates FixedAuthProvider with specified claims
   - Returns Arc for injection into test AppState
-  - See user-provided example for pattern (lines 54-60 of user input)
+  - STATUS: ✅ Completed - helper function created and exported
 
-- [ ] T021.6 Update `create_test_router` in `tests/common/mod.rs` to accept AuthProvider
+- [X] T021.6 Update `create_test_router` in `tests/common/test_router.rs` to accept AuthProvider
   - **Updates the function originally created in T013** - this is the same `create_test_router` helper
-  - Updated function signature: `create_test_router(accounts_db: DBConnection, resources_db: DBConnection, auth_provider: Arc<dyn AuthProvider>) -> Router`
+  - Updated function signature: `create_test_router_with_state(accounts_db: DBConnection, resources_db: DBConnection, auth_provider: Arc<dyn AuthProvider>) -> Router`
   - Update AppState construction to include auth_provider parameter (third field added to existing AppState)
   - Allows tests to inject authentication behavior in addition to database connections
+  - STATUS: ✅ Completed - function signature updated, AppState includes auth_provider
 
 - [ ] T021.7 Update existing integration tests to use FixedAuthProvider
   - Modify `tests/report_with_auth_test.rs` to create test router with FixedAuthProvider
   - Remove reliance on `test_token_` prefix (no longer needed with trait injection)
   - Tests now use clean dependency injection for both database AND authentication
   - Validates end-to-end flow: FixedAuthProvider → middleware loads account → handler processes request
+  - STATUS: ⏸️ NOT COMPLETED - Phase 4.5 implementation stopped as requested
 
-- [ ] T021.8 [P] Add documentation to AuthProvider trait and implementations
+- [X] T021.8 [P] Add documentation to AuthProvider trait and implementations
   - Document trait purpose: "Pluggable authentication for production and testing"
   - Document RealAuthProvider: "Production implementation using JWT/API key validation"
   - Document FixedAuthProvider: "Test implementation that returns pre-configured claims"
   - Add examples showing how to inject in tests
+  - STATUS: ✅ Completed - comprehensive documentation added to all types
 
 **Checkpoint**: At this point, authentication is fully trait-based. Production code has zero test logic, tests use clean dependency injection for authentication. This unblocks Phase 5 integration tests which can now run without `#[cfg(test)]` compilation unit issues.
 

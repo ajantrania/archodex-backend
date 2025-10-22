@@ -22,7 +22,14 @@
       "Bash(awk:*)",
       "Bash(cargo build:*)",
       "Bash(git grep:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(bash:*)",
+      "Bash(grep:*)",
+      "Bash(RUST_BACKTRACE=1 cargo test:*)",
+      "Bash(if [ -d \"/Users/ajantrania/code/archodex/archodex-backend/specs/003-db-dependency-injection/checklists\" ])",
+      "Bash(then echo \"exists\")",
+      "Bash(else echo \"not found\")",
+      "Bash(fi)"
     ],
     "deny": []
   }

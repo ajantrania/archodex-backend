@@ -40,6 +40,9 @@ pub fn router() -> Router {
         .allow_headers([AUTHORIZATION, CONTENT_TYPE])
         .allow_credentials(true);
 
+    #[cfg(not(feature = "archodex-com"))]
+    let cors_layer = cors_layer.allow_private_network(true);
+
     let unauthed_router = Router::new().route("/health", get(|| async { "Ok" }));
 
     let dashboard_authed_router = Router::new()

@@ -37,7 +37,8 @@ pub fn router() -> Router {
             HeaderValue::from_str("http://localhost:5173")
                 .expect("Failed to parse localhost as HeaderValue"),
         ]))
-        .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE])
+        .allow_credentials(true);
 
     let unauthed_router = Router::new().route("/health", get(|| async { "Ok" }));
 

@@ -43,8 +43,6 @@ pub fn router() -> Router {
     #[cfg(not(feature = "archodex-com"))]
     let cors_layer = cors_layer.allow_private_network(true);
 
-    let unauthed_router = Router::new().route("/health", get(|| async { "Ok" }));
-
     let dashboard_authed_router = Router::new()
         .nest(
             "/account/:account_id",
@@ -73,6 +71,7 @@ pub fn router() -> Router {
         .route("/accounts", get(accounts::list_accounts))
         .route("/accounts", post(accounts::create_account))
         .layer(ServiceBuilder::new().layer(middleware::from_fn(DashboardAuth::authenticate)))
+        .route("/health", get(|| async { "Ok" }))
         .layer(cors_layer.clone());
 
     let report_api_key_authed_router = Router::new()
@@ -82,7 +81,7 @@ pub fn router() -> Router {
 
     let default_on_response_trace_handler = DefaultOnResponse::new().level(Level::INFO);
 
-    unauthed_router
+    Router::new()
         .merge(dashboard_authed_router)
         .merge(report_api_key_authed_router)
         .layer(

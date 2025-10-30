@@ -1,5 +1,6 @@
 .aws-sam
 archodex-com
 !archodex-com/Cargo.toml
+LICENSE.md
 db
 target

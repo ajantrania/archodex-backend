@@ -88,7 +88,7 @@ impl Env {
                 #[cfg(feature = "archodex-com")]
                 accounts_surrealdb_url,
                 #[cfg(not(feature = "archodex-com"))]
-                accounts_surrealdb_url: surrealdb_url.to_string(),
+                accounts_surrealdb_url: surrealdb_url.clone(),
                 #[cfg(not(feature = "archodex-com"))]
                 surrealdb_url,
                 surrealdb_creds,
